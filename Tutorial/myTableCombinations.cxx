@@ -1,25 +1,33 @@
 #include "Framework/AnalysisTask.h"
+#include "Framework/runDataProcessing.h" // Provides the workflow hooks
 #include <TH1F.h>
+#include <TFile.h>
 #include <cmath>
 
 using namespace o2;
 using namespace o2::framework;
 
 struct MyDeltaPhiTask {
-    // ALICE O2 macro to automatically register and save the histogram to AnalysisResults.root
-    HISTO1D(hDeltaPhi, "hDeltaPhi", "Delta-Phi Distribution;#Delta#phi;Counts", 100, -M_PI, M_PI);
+    TH1F* hDeltaPhi = nullptr;
+    TFile* outFile = nullptr;
 
-    // The framework automatically feeds track data from the AO2D file into this function
+    // 1. Initialize the file and histogram directly
+    void init(InitContext& ic) {
+        outFile = new TFile("DeltaPhiResults.root", "RECREATE");
+        hDeltaPhi = new TH1F("hDeltaPhi", "Delta-Phi Distribution;#Delta#phi;Counts", 100, -M_PI, M_PI);
+    }
+
+    // 2. Process the tracks using C++ iterators instead of array subscripts
     void process(aod::Tracks const& tracks) {
-        
-        // Loop over all track combinations in the event
-        for (int i = 0; i < tracks.size(); ++i) {
-            for (int j = i + 1; j < tracks.size(); ++j) {
+        // Loop over the track table safely
+        for (auto it1 = tracks.begin(); it1 != tracks.end(); ++it1) {
+            auto it2 = it1;
+            ++it2; // Start inner loop one element ahead to avoid self-pairing
+            
+            for (; it2 != tracks.end(); ++it2) {
+                float dphi = it1->phi() - it2->phi();
                 
-                // Calculate delta-phi
-                float dphi = tracks[i].phi() - tracks[j].phi();
-                
-                // Normalize the angle to the [-pi, pi] range
+                // Normalize angle to [-pi, pi]
                 while (dphi > M_PI) dphi -= 2 * M_PI;
                 while (dphi < -M_PI) dphi += 2 * M_PI;
                 
@@ -27,9 +35,20 @@ struct MyDeltaPhiTask {
             }
         }
     }
+
+    // 3. Save and close the file when the data stream ends
+    void endOfStream(EndOfStreamContext& ec) {
+        if (outFile) {
+            outFile->cd();
+            hDeltaPhi->Write();
+            outFile->Close();
+        }
+    }
 };
 
-// Generates the main() function and hooks your task into the O2 data pipeline
-WORKFLOW_APP(
-    o2::framework::AnalysisTask<MyDeltaPhiTask>
-);
+// 4. Hook the task into the O2 workflow explicitly (replaces WORKFLOW_APP)
+WorkflowSpec defineDataProcessing(ConfigContext const& cfg) {
+    return WorkflowSpec{
+        adaptAnalysisTask<MyDeltaPhiTask>(cfg)
+    };
+}
