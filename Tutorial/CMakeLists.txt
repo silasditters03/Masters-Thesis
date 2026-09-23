@@ -11,7 +11,6 @@ find_package(O2 REQUIRED)
 find_package(O2Physics REQUIRED)
 
 add_executable(my-analysis-task myTableCombinations.cxx)
-target_link_libraries(my-analysis-task PUBLIC 
-    O2Physics::O2Physics 
-    O2::O2
-)
+
+# Link ONLY the main O2 target which contains the analysis framework
+target_link_libraries(my-analysis-task PUBLIC O2::O2)
