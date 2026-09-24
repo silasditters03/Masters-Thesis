@@ -9,12 +9,12 @@ project(MyThesisAnalysis)
 find_package(O2 REQUIRED)
 find_package(O2Physics REQUIRED)
 
-add_executable(my-analysis-task myTableCombinations.cxx)
+# Point to the official tutorial file
+add_executable(tutorial-task collisionTracksIteration.cxx)
 
-# Explicitly inject the O2 and O2Physics include folders
-target_include_directories(my-analysis-task PUBLIC 
+target_include_directories(tutorial-task PUBLIC 
     $ENV{O2_ROOT}/include 
     $ENV{O2PHYSICS_ROOT}/include
 )
 
-target_link_libraries(my-analysis-task PUBLIC O2::Framework)
+target_link_libraries(tutorial-task PUBLIC O2::Framework)
