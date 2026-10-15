@@ -1,0 +1,294 @@
+// Copyright 2019-2020 CERN and copyright holders of ALICE O2.
+// See https://alice-o2.web.cern.ch/copyright for details of the copyright holders.
+// All rights not expressly granted are reserved.
+//
+// This software is distributed under the terms of the GNU General Public
+// License v3 (GPL Version 3), copied verbatim in the file "COPYING".
+//
+// In applying this license CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+/// \file HFInvMassFitter.h
+/// \brief HFInvMassFitter class
+///
+/// \author Zhen Zhang <zhenz@cern.ch>
+/// \author Mingyu Zhang <mingyu.zang@cern.ch>
+/// \author Xinye Peng  <xinye.peng@cern.ch>
+/// \author Biao Zhang <biao.zhang@cern.ch>
+/// \author Oleksii Lubynets <oleksii.lubynets@cern.ch>
+/// \author Phil Stahlhut <phil.lennart.stahlhut@cern.ch>
+
+#ifndef PWGHF_D2H_MACROS_HFINVMASSFITTER_H_
+#define PWGHF_D2H_MACROS_HFINVMASSFITTER_H_
+
+#include <RooAbsPdf.h>
+#include <RooDataHist.h>
+#include <RooFitResult.h>
+#include <RooPlot.h>
+#include <RooRealVar.h>
+#include <RooWorkspace.h>
+#include <TF1.h>
+#include <TH1.h>
+#include <TH2.h>
+#include <TNamed.h>
+#include <TRandom3.h>
+#include <TVirtualPad.h>
+
+#include <Rtypes.h>
+#include <RtypesCore.h>
+
+#include <array>
+#include <string>
+#include <utility>
+#include <vector>
+
+class HFInvMassFitter : public TNamed
+{
+ private:
+  struct ParameterRanges {
+    double lower{};
+    double upper{};
+    double initial{};
+    double sigma{-999.};
+  };
+
+ public:
+  enum TypeOfBkgPdf {
+    Expo = 0,
+    Poly1,   // 1
+    Poly2,   // 2
+    Pow,     // 3
+    PowExpo, // 4
+    Poly3,   // 5
+    NoBkg,   // 6
+    NTypesOfBkgPdf
+  };
+  std::array<std::string, NTypesOfBkgPdf> namesOfBkgPdf{"bkgFuncExpo", "bkgFuncPoly1", "bkgFuncPoly2", "bkgFuncPow", "bkgFuncPowExpo", "bkgFuncPoly3"};
+  enum TypeOfSgnPdf {
+    SingleGaus = 0,
+    DoubleGaus,              // 1
+    DoubleGausSigmaRatioPar, // 2
+    GausSec,                 // 3
+    DoubleSidedCrystalBall,  // 4
+    NTypesOfSgnPdf
+  };
+  enum TypeOfReflPdf {
+    SingleGausRefl = 0,
+    DoubleGausRefl, // 1
+    Poly3Refl,      // 2
+    Poly6Refl,      // 3
+    NTypesOfReflPdf
+  };
+  std::array<std::string, NTypesOfReflPdf> namesOfReflPdf{"reflFuncGaus", "reflFuncDoubleGaus", "reflFuncPoly3", "reflFuncPoly6"};
+  HFInvMassFitter() = delete;
+  HFInvMassFitter(TH1* histoToFit, double minValue, double maxValue, int fitTypeBkg = Expo, int fitTypeSgn = SingleGaus, int randomSeed = -1);
+  ~HFInvMassFitter() override;
+  void setHistogramForFit(TH1* histoToFit);
+  void setUseLikelihoodFit() { mFitOption = "L,E"; }
+  void setUseChi2Fit() { mFitOption = "Chi2"; }
+  void setFitOption(const std::string& opt) { mFitOption = opt; }
+  RooAbsPdf* createBackgroundFitFunction(RooWorkspace* workspace) const;
+  RooAbsPdf* createSignalFitFunction(RooWorkspace* workspace);
+  RooAbsPdf* createReflectionFitFunction(RooWorkspace* workspace) const;
+
+  void setFitRange(double minValue, double maxValue);
+  void setFitFunctions(int fitTypeBkg, int fitTypeSgn);
+  void setSigmaLimit(double sigmaValue, double sigmaLimit);
+  void setParticlePdgMass(double mass) { mMassParticle = mass; }
+  [[nodiscard]] double getParticlePdgMass() const { return mMassParticle; }
+  void setInitialGaussianMean(double mean);
+  void setInitialGaussianSigma(double sigma);
+  void setInitialSecondGaussianSigma(double sigma) { mSigmaSgnDoubleGaus = sigma; }
+  void setInitialFracDoubleGaus(double frac) { mFracDoubleGaus = frac; }
+  void setInitialRatioDoubleGausSigma(double fracSigma) { mRatioDoubleGausSigma = fracSigma; }
+  void setFixGaussianMean(double mean);
+  void setBoundGaussianMean(double mean, double meanLowLimit, double meanUpLimit);
+  void setBoundReflGausMean(double mean, double meanLowLimit, double meanUpLimit);
+  void setFixGaussianSigma(double sigma);
+  void setBoundGausSigma(double sigma, double sigmaLimit);
+  void setFixSecondGaussianSigma(double sigma);
+  void setFixFrac2Gaus(double frac);
+  void setFixRatioToGausSigma(double sigmaFrac);
+  void setFixSignalYield(double yield) { mFixedRawYield = yield; }
+  void setNumberOfSigmaForSidebands(double numberOfSigma) { mNSigmaForSidebands = numberOfSigma; }
+  void setNumberOfSigmaForSignal(double numberOfSigma) { mNSigmaForSgn = numberOfSigma; }
+  void setFixDscbAlphaL(double alphaL);
+  void setFixDscbAlphaR(double alphaR);
+  void setFixDscbNL(double nL);
+  void setFixDscbNR(double nR);
+  void setDscbAlphaLInitialValue(double value) { mDscbAlphaLInitialValue = value; }
+  void setDscbAlphaLLowLimit(double value) { mDscbAlphaLLowLimit = value; }
+  void setDscbAlphaLUpLimit(double value) { mDscbAlphaLUpLimit = value; }
+  void setDscbAlphaRInitialValue(double value) { mDscbAlphaRInitialValue = value; }
+  void setDscbAlphaRLowLimit(double value) { mDscbAlphaRLowLimit = value; }
+  void setDscbAlphaRUpLimit(double value) { mDscbAlphaRUpLimit = value; }
+  void setDscbNLInitialValue(double value) { mDscbNLInitialValue = value; }
+  void setDscbNLLowLimit(double value) { mDscbNLLowLimit = value; }
+  void setDscbNLUpLimit(double value) { mDscbNLUpLimit = value; }
+  void setDscbNRInitialValue(double value) { mDscbNRInitialValue = value; }
+  void setDscbNRLowLimit(double value) { mDscbNRLowLimit = value; }
+  void setDscbNRUpLimit(double value) { mDscbNRUpLimit = value; }
+  void plotBkg(RooAbsPdf* pdf, Color_t color = kRed);
+  void plotRefl(RooAbsPdf* pdf);
+  void setReflFuncFixed();
+  void doFit();
+  void setInitialReflOverSgn(double reflOverSgn) { mReflOverSgn = reflOverSgn; }
+  void setFixReflOverSgn(double reflOverSgn);
+  void setTemplateReflections(TH1* histoRefl);
+  void setDrawBgPrefit(bool value = true) { mDrawBgPrefit = value; }
+  void setHighlightPeakRegion(bool value = true) { mHighlightPeakRegion = value; }
+  [[nodiscard]] double getChiSquareOverNDFTotal() const { return mChiSquareOverNdfTotal; }
+  [[nodiscard]] double getChiSquareOverNDFBkg() const { return mChiSquareOverNdfBkg; }
+  [[nodiscard]] double getRawYield() const { return mRawYield; }
+  [[nodiscard]] double getRawYieldError() const { return mRawYieldErr; }
+  [[nodiscard]] double getRawYieldCounted() const { return mRawYieldCounted; }
+  [[nodiscard]] double getRawYieldCountedError() const { return mRawYieldCountedErr; }
+  [[nodiscard]] double getBkgYield() const { return mBkgYield; }
+  [[nodiscard]] double getBkgYieldError() const { return mBkgYieldErr; }
+  [[nodiscard]] double getSignificance() const { return mSignificance; }
+  [[nodiscard]] double getSignificanceError() const { return mSignificanceErr; }
+  [[nodiscard]] double getMean() const { return mRooMeanSgn->getVal(); }
+  [[nodiscard]] double getMeanUncertainty() const { return mRooMeanSgn->getError(); }
+  [[nodiscard]] double getSigma() const { return mRooSigmaSgn->getVal(); }
+  [[nodiscard]] double getSigmaUncertainty() const { return mRooSigmaSgn->getError(); }
+  [[nodiscard]] double getDscbAlphaL() const { return mRooDscbAlphaL ? mRooDscbAlphaL->getVal() : 0.; }
+  [[nodiscard]] double getDscbAlphaR() const { return mRooDscbAlphaR ? mRooDscbAlphaR->getVal() : 0.; }
+  [[nodiscard]] double getDscbNL() const { return mRooDscbNL ? mRooDscbNL->getVal() : 0.; }
+  [[nodiscard]] double getDscbNR() const { return mRooDscbNR ? mRooDscbNR->getVal() : 0.; }
+  [[nodiscard]] double getDscbAlphaLUncertainty() const { return mRooDscbAlphaL ? mRooDscbAlphaL->getError() : 0.; }
+  [[nodiscard]] double getDscbAlphaRUncertainty() const { return mRooDscbAlphaR ? mRooDscbAlphaR->getError() : 0.; }
+  [[nodiscard]] double getDscbNLUncertainty() const { return mRooDscbNL ? mRooDscbNL->getError() : 0.; }
+  [[nodiscard]] double getDscbNRUncertainty() const { return mRooDscbNR ? mRooDscbNR->getError() : 0.; }
+  [[nodiscard]] double getSecSigma() const { return mRooSecSigmaSgn->getVal(); }
+  [[nodiscard]] double getSecSigmaUncertainty() const { return mRooSecSigmaSgn->getError(); }
+  [[nodiscard]] double getFracDoubleGaus() const { return mRooFracDoubleGaus->getVal(); }
+  [[nodiscard]] double getFracDoubleGausUncertainty() const { return mRooFracDoubleGaus->getError(); }
+  [[nodiscard]] double getReflOverSig() const { return mReflPdf != nullptr ? mReflOverSgn : 0.; }
+  [[nodiscard]] int getFitStatus() const { return mFitStatus; }
+  [[nodiscard]] int getCovQual() const { return mCovQual; }
+  [[nodiscard]] double getEDM() const { return mEdm; }
+  [[nodiscard]] double getMinNll() const { return mMinNll; }
+  [[nodiscard]] double getSgnGlobalCorrelCoeff() const { return mSgnGlobalCorrelCoeff; }
+  [[nodiscard]] TH2* getCovCorrMatrix() const { return mCovCorrMatrix; }
+  void calculateSignal(double& signal, double& errSignal) const;
+  void countSignal(double& signal, double& errSignal) const;
+  void calculateBackground(double& bkg, double& errBkg) const;
+  void calculateSignificance(double& significance, double& errSignificance) const;
+  void checkForSignal(double& estimatedSignal);
+  void calculateFitToDataRatio() const;
+  void drawFit(TVirtualPad* pad, const std::vector<std::string>& plotLabels, bool writeParInfo = true);
+  void drawResidual(TVirtualPad* pad);
+  void drawRatio(TVirtualPad* pad);
+  void drawReflection(TVirtualPad* pad);
+
+ private:
+  HFInvMassFitter(const HFInvMassFitter& source);
+  HFInvMassFitter& operator=(const HFInvMassFitter& source);
+  void fillWorkspace(RooWorkspace& w) const;
+  void highlightPeakRegion(const RooPlot* plot, Color_t color = kGray + 1, Width_t width = 1, Style_t style = 2) const;
+  [[nodiscard]] double randomizeInitialParameter(const ParameterRanges& parameterRanges) const;
+  [[nodiscard]] std::pair<double, double> getRangesOfSignal() const;
+  [[nodiscard]] double integrateHistoInvMassOverWorkspaceRanges(const std::vector<std::string>& ranges) const;
+  void cutRangesFromHisto(TH1* histo, const std::vector<std::string>& ranges) const;
+  static TH2* fillCovCorrMatrix(const RooFitResult* fitResult);
+
+  TH1* mHistoInvMass; // histogram to fit
+  std::string mFitOption;
+  double mMinMass;                 // lower mass limit
+  double mMaxMass;                 // upper mass limit
+  int mTypeOfBkgPdf;               // background fit function
+  int mTypeOfSgnPdf;               // signal fit function
+  int mTypeOfReflPdf;              // reflection fit function
+  double mMassParticle;            // pdg value of particle mass
+  double mMass;                    /// signal gaussian mean value
+  double mMassLowLimit;            /// lower limit of the allowed mass range
+  double mMassUpLimit;             /// upper limit of the allowed mass range
+  double mMassReflLowLimit;        /// lower limit of the allowed mass range for reflection
+  double mMassReflUpLimit;         /// upper limit of the allowed mass range for reflection
+  double mSecMass;                 /// Second peak mean value
+  double mSigmaSgn;                /// signal gaussian sigma
+  double mSecSigma;                /// Second peak gaussian sigma
+  double mNSigmaForSidebands;      /// number of sigmas to veto the signal peak
+  double mNSigmaForSgn;            /// number of sigmas to veto the signal peak
+  double mSigmaSgnErr;             /// uncertainty on signal gaussian sigma
+  double mSigmaSgnDoubleGaus;      /// signal 2gaussian sigma
+  bool mFixedMean;                 /// switch for fix mean of gaussian
+  bool mBoundMean;                 /// switch for bound mean of guassian
+  bool mBoundReflMean;             /// switch for bound mean of guassian for reflection
+  bool mFixedSigma;                /// fix sigma or not
+  bool mFixedSigmaDoubleGaus;      /// fix sigma of 2gaussian or not
+  bool mBoundSigma;                /// set bound sigma or not
+  bool mFixedDscbTailParams;       /// switch for fix double sided Crystal Ball tail parameters
+  double mSigmaValue;              /// value of sigma
+  double mParamSgn;                /// +/- range variation of bound Sigma of gaussian in %
+  double mFracDoubleGaus;          /// initialization for fraction of 2nd gaussian in case of k2Gaus or k2GausSigmaRatioPar
+  double mFixedRawYield;           /// initialization for raw yield
+  bool mFixedFracDoubleGaus;       /// switch for fixed fraction of 2nd gaussian in case of k2Gaus or k2GausSigmaRatioPar
+  double mRatioDoubleGausSigma;    /// initialization for ratio between two gaussian sigmas in case of k2GausSigmaRatioPar
+  bool mFixedRatioDoubleGausSigma; /// switch for fixed ratio between two gaussian sigmas in case of k2GausSigmaRatioPar
+  double mReflOverSgn;             /// reflection/signal
+  bool mEnableReflections;         /// flag use/not use reflections
+  double mRawYield;                /// signal gaussian integral
+  double mRawYieldErr;             /// err on signal gaussian integral
+  double mRawYieldCounted;         /// signal gaussian integral evaluated via bin counting
+  double mRawYieldCountedErr;      /// err on signal gaussian integral evaluated via bin counting
+  double mBkgYield;                /// background
+  double mBkgYieldErr;             /// err on background
+  double mSignificance;            /// significance
+  double mSignificanceErr;         /// err on significance
+  double mChiSquareOverNdfTotal;   /// chi2/ndf of the total fit
+  double mChiSquareOverNdfBkg;     /// chi2/ndf of the background (sidebands) pre-fit
+  bool mFixReflOverSgn;            /// switch for fix refl/signal
+  double mDscbAlphaLInitialValue;  /// double sided Crystal Ball alpha left initial value
+  double mDscbAlphaLLowLimit;      /// double sided Crystal Ball alpha left lower limit
+  double mDscbAlphaLUpLimit;       /// double sided Crystal Ball alpha left upper limit
+  double mDscbAlphaRInitialValue;  /// double sided Crystal Ball alpha right initial value
+  double mDscbAlphaRLowLimit;      /// double sided Crystal Ball alpha right lower limit
+  double mDscbAlphaRUpLimit;       /// double sided Crystal Ball alpha right upper limit
+  double mDscbNLInitialValue;      /// double sided Crystal Ball n left initial value
+  double mDscbNLLowLimit;          /// double sided Crystal Ball n left lower limit
+  double mDscbNLUpLimit;           /// double sided Crystal Ball n left upper limit
+  double mDscbNRInitialValue;      /// double sided Crystal Ball n right initial value
+  double mDscbNRLowLimit;          /// double sided Crystal Ball n right lower limit
+  double mDscbNRUpLimit;           /// double sided Crystal Ball n right upper limit
+  RooRealVar* mRooMeanSgn;         /// mean for gaussian of signal
+  RooRealVar* mRooSigmaSgn;        /// sigma for gaussian of signal
+  RooRealVar* mRooSecSigmaSgn;     /// second sigma for composite gaussian of signal
+  RooRealVar* mRooFracDoubleGaus;  /// fraction of second gaussian for composite gaussian of signal
+  RooAbsPdf* mSgnPdf;              /// signal fit function
+  RooAbsPdf* mBkgPdf;              /// background fit function
+  RooAbsPdf* mReflPdf;             /// reflection fit function
+  RooRealVar* mRooNSgn;            /// total Signal fit function integral
+  RooRealVar* mRooNBkg;            /// total background fit function integral
+  RooRealVar* mRooNRefl;           /// total reflection fit function integral
+  RooRealVar* mRooDscbAlphaL;      /// double sided Crystal Ball alpha left
+  RooRealVar* mRooDscbAlphaR;      /// double sided Crystal Ball alpha right
+  RooRealVar* mRooDscbNL;          /// double sided Crystal Ball n left
+  RooRealVar* mRooDscbNR;          /// double sided Crystal Ball n right
+  RooAbsPdf* mTotalPdf;            /// total fit function
+  RooPlot* mInvMassFrame;          /// frame of mass
+  RooPlot* mReflFrame;             /// reflection frame
+  RooPlot* mReflOnlyFrame;         /// reflection frame plot on reflection only
+  RooPlot* mResidualFrame;         /// residual frame
+  RooHist* mResidualHist;          /// residual histogram
+  RooPlot* mRatioFrame;            /// fit/data ratio frame
+  RooWorkspace* mWorkspace;        /// workspace
+  double mIntegralBkg;             /// integral of background fit function
+  double mIntegralSgn;             /// integral of signal fit function
+  TH1* mHistoTemplateRefl;         /// reflection histogram
+  bool mDrawBgPrefit;              /// draw background after fitting the sidebands
+  bool mHighlightPeakRegion;       /// draw vertical lines showing the peak region (usually +- 3 sigma)
+  int mRandomSeed;                 /// seed for random engine for fit's initial parameters randomization
+  TRandom3* mRandomGen;            /// engine for fit's initial parameters randomization
+  int mFitStatus;                  /// fit result status, see https://root-forum.cern.ch/t/meaning-of-values-returned-by-roofitresult-status/16355/2
+  int mCovQual;                    /// fit result covariance matrix quality, see https://root.cern.ch/doc/v620/Minuit2Minimizer_8cxx_source.html#l01121
+  double mEdm;                     /// fit quality metrics: Estimated Distance to Minimum
+  double mMinNll;                  /// fit quality metrics: minimum negative log-likelihood (NLL) value achieved at the best-fit parameter values
+  double mSgnGlobalCorrelCoeff;    /// global correlation coefficient of mRooNSgn with other fit parameters
+  TH2* mCovCorrMatrix;             /// covariance (upper left + diagonal) and correlation (lower right) matrix of free fit parameters
+
+  ClassDefOverride(HFInvMassFitter, 1);
+};
+
+#endif // PWGHF_D2H_MACROS_HFINVMASSFITTER_H_

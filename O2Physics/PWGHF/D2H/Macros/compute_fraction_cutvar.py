@@ -1,0 +1,436 @@
+"""
+Script for the (non-)prompt fraction calculation with the cut-variation method
+
+\author Fabrizio Grosa <fabrizio.grosa@cern.ch>, CERN
+\author Fabio Catalano <fabio.catalano@cern.ch>, Politecnico and INFN Torino
+\author Stefano Politanò <stefano.politano@cern.ch>, Politecnico and INFN Torino
+\author Daniel Battistini <daniel.battistini@cern.ch>, TUM
+"""
+
+import argparse
+import json
+import os
+import sys
+from enum import IntEnum, auto
+
+import numpy as np  # pylint: disable=import-error
+import ROOT  # pylint: disable=import-error
+
+sys.path.insert(0, '..')
+from cut_variation import CutVarMinimiser, MinimisationStatus
+from style_formatter import set_object_style
+
+# pylint: disable=no-member,too-many-locals,too-many-statements
+
+class PlotType(IntEnum):
+    Rawy = 0
+    Eff = auto()
+    Frac = auto()
+    Cov = auto()
+    Unc = auto()
+    RelUnc = auto()
+    N = auto()
+
+class ObjectToSave(IntEnum):
+    Canvas = 0
+    RawYield = auto()
+    Uncertainty = auto()
+    Efficiency = auto()
+    Fraction = auto()
+    CorrectedYield = auto()
+    CorrelationMatrix = auto()
+    Covariance = auto()
+    CorrectedFraction = auto()
+    MinimisationStatus = auto()
+    N = auto()
+
+def main(config):
+    """
+    Main function
+    """
+
+    ROOT.gROOT.SetBatch(True)
+    ROOT.TH1.AddDirectory(False)
+
+    with open(config, encoding="utf8") as fil:
+        cfg = json.load(fil)
+
+    zero_eff_unc = cfg.get("zero_eff_unc", False)
+    effp_shift_nsigma = cfg.get("effp_shift_nsigma", 0.0)
+    effnp_shift_nsigma = cfg.get("effnp_shift_nsigma", 0.0)
+
+    hist_rawy, hist_effp, hist_effnp = ([] for _ in range(3))
+    for filename_rawy, filename_eff in zip(cfg["rawyields"]["inputfiles"], cfg["efficiencies"]["inputfiles"]):
+        infile_rawy = ROOT.TFile.Open(os.path.join(cfg["rawyields"]["inputdir"], filename_rawy))
+        hist_rawy_name = cfg["rawyields"]["histoname"]
+        hist_rawy.append(infile_rawy.Get(hist_rawy_name))
+        if not isinstance(hist_rawy[-1], ROOT.TH1):
+            sys.exit(f"\33[31mFatal error: Histogram with raw yield \"{hist_rawy_name}\" is absent. Exit.\33[0m")
+        hist_rawy[-1].SetDirectory(0)
+        infile_rawy.Close()
+
+        infile_eff = ROOT.TFile.Open(os.path.join(cfg["efficiencies"]["inputdir"], filename_eff))
+        hist_effp_name = cfg["efficiencies"]["histonames"]["prompt"]
+        hist_effnp_name = cfg["efficiencies"]["histonames"]["nonprompt"]
+        hist_effp.append(infile_eff.Get(hist_effp_name))
+        hist_effnp.append(infile_eff.Get(hist_effnp_name))
+        if not isinstance(hist_effp[-1], ROOT.TH1):
+            sys.exit(f"\33[31mFatal error: Histogram with efficiency for prompt \"{hist_effp_name}\" is absent. Exit.\33[0m")
+        if not isinstance(hist_effnp[-1], ROOT.TH1):
+            sys.exit(f"\33[31mFatal error: Histogram with efficiency for nonprompt \"{hist_effnp}\" is absent. Exit.\33[0m")
+        hist_effp[-1].SetDirectory(0)
+        hist_effnp[-1].SetDirectory(0)
+        for i_bin in range(1, hist_effp[-1].GetNbinsX() + 1):
+            hist_effp[-1].SetBinContent(i_bin, hist_effp[-1].GetBinContent(i_bin) + effp_shift_nsigma*hist_effp[-1].GetBinError(i_bin))
+            hist_effnp[-1].SetBinContent(i_bin, hist_effnp[-1].GetBinContent(i_bin) + effnp_shift_nsigma*hist_effnp[-1].GetBinError(i_bin))
+            if zero_eff_unc:
+                hist_effp[-1].SetBinError(i_bin, 0.0)
+                hist_effnp[-1].SetBinError(i_bin, 0.0)
+        infile_eff.Close()
+
+    pt_bin_to_process = cfg.get("pt_bin_to_process", -1)
+    if not isinstance(pt_bin_to_process, int):
+        sys.exit("\33[31mFatal error: pt_bin_to_process must be an integer value. Exit.")
+    if (pt_bin_to_process != -1 and pt_bin_to_process < 1) or pt_bin_to_process > hist_rawy[0].GetNbinsX():
+        sys.exit("\33[31mFatal error: pt_bin_to_process must be a positive value up to number of bins in raw yield histogram. Exit.")
+
+    is_draw_title = [False] * PlotType.N
+    is_draw_title[PlotType.Rawy] = cfg.get("is_draw_title", {}).get("rawy", True)
+    is_draw_title[PlotType.Eff] = cfg.get("is_draw_title", {}).get("eff", False)
+    is_draw_title[PlotType.Frac] = cfg.get("is_draw_title", {}).get("frac", False)
+    is_draw_title[PlotType.Cov] = cfg.get("is_draw_title", {}).get("cov", False)
+    is_draw_title[PlotType.Unc] = cfg.get("is_draw_title", {}).get("unc", True)
+    is_draw_title[PlotType.RelUnc] = cfg.get("is_draw_title", {}).get("relunc", True)
+
+    is_save_canvas_as_macro = [False] * PlotType.N
+    is_save_canvas_as_macro[PlotType.Rawy] = cfg.get("is_save_canvas_as_macro", {}).get("rawy", False)
+    is_save_canvas_as_macro[PlotType.Eff] = cfg.get("is_save_canvas_as_macro", {}).get("eff", False)
+    is_save_canvas_as_macro[PlotType.Frac] = cfg.get("is_save_canvas_as_macro", {}).get("frac", False)
+    is_save_canvas_as_macro[PlotType.Cov] = cfg.get("is_save_canvas_as_macro", {}).get("cov", False)
+    is_save_canvas_as_macro[PlotType.Unc] = cfg.get("is_save_canvas_as_macro", {}).get("unc", False)
+    is_save_canvas_as_macro[PlotType.RelUnc] = cfg.get("is_save_canvas_as_macro", {}).get("relunc", False)
+
+    is_save_to_root_file = [False] * ObjectToSave.N
+    is_save_to_root_file[ObjectToSave.Canvas] = cfg.get("is_save_to_root_file", {}).get("canvas", True)
+    is_save_to_root_file[ObjectToSave.RawYield] = cfg.get("is_save_to_root_file", {}).get("raw_yield", True)
+    is_save_to_root_file[ObjectToSave.Uncertainty] = cfg.get("is_save_to_root_file", {}).get("uncertainty", True)
+    is_save_to_root_file[ObjectToSave.Efficiency] = cfg.get("is_save_to_root_file", {}).get("efficiency", True)
+    is_save_to_root_file[ObjectToSave.Fraction] = cfg.get("is_save_to_root_file", {}).get("fraction", True)
+    is_save_to_root_file[ObjectToSave.CorrectedYield] = cfg.get("is_save_to_root_file", {}).get("corrected_yield", True)
+    is_save_to_root_file[ObjectToSave.CorrelationMatrix] = cfg.get("is_save_to_root_file", {}).get("correlation_matrix", True)
+    is_save_to_root_file[ObjectToSave.Covariance] = cfg.get("is_save_to_root_file", {}).get("covariance", True)
+    is_save_to_root_file[ObjectToSave.CorrectedFraction] = cfg.get("is_save_to_root_file", {}).get("corrected_fraction", True)
+    is_save_to_root_file[ObjectToSave.MinimisationStatus] = cfg.get("is_save_to_root_file", {}).get("minimisation_status", True)
+
+    if cfg["central_efficiency"]["computerawfrac"]:
+        infile_name = os.path.join(cfg["central_efficiency"]["inputdir"], cfg["central_efficiency"]["inputfile"])
+        infile_central_eff = ROOT.TFile.Open(infile_name)
+        hist_central_effp_name = cfg["central_efficiency"]["histonames"]["prompt"]
+        hist_central_effp = infile_central_eff.Get(hist_central_effp_name)
+        if not isinstance(hist_central_effp[-1], ROOT.TH1):
+            sys.exit(f"\33[31mFatal error: Histogram with central efficiency for prompt \"{hist_central_effp_name}\" is absent. Exit.\33[0m")
+        hist_central_effnp_name = cfg["central_efficiency"]["histonames"]["nonprompt"]
+        hist_central_effnp = infile_central_eff.Get(hist_central_effnp_name)
+        if not isinstance(hist_central_effnp[-1], ROOT.TH1):
+            sys.exit(f"\33[31mFatal error: Histogram with central efficiency for nonprompt \"{hist_central_effnp_name}\" is absent. Exit.\33[0m")
+        hist_central_effp.SetDirectory(0)
+        hist_central_effnp.SetDirectory(0)
+        infile_central_eff.Close()
+
+        # Check if the histograms have the same binning, assuming the two sets of inputs are consistent
+        for ibin in range(1, hist_rawy[0].GetNbinsX() + 2):  # +2 to include the upper edge of last bin
+            if hist_rawy[0].GetBinLowEdge(ibin) != hist_central_effp.GetBinLowEdge(ibin):
+                raise ValueError("Histograms have different binning, check the input files")
+
+    hist_corry_prompt = hist_rawy[0].Clone("hCorrYieldsPrompt")
+    hist_corry_nonprompt = hist_rawy[0].Clone("hCorrYieldsNonPrompt")
+    hist_covariance_pnp = hist_rawy[0].Clone("hCovPromptNonPrompt")
+    hist_covariance_pp = hist_rawy[0].Clone("hCovPromptPrompt")
+    hist_covariance_npnp = hist_rawy[0].Clone("hCovNonPromptNonPrompt")
+    hist_corrfrac_prompt = hist_rawy[0].Clone("hCorrFracPrompt")
+    hist_corrfrac_nonprompt = hist_rawy[0].Clone("hCorrFracNonPrompt")
+    hist_minimisation_status = hist_rawy[0].Clone("hMinimizationStatus")
+    hist_red_chi2  = hist_rawy[0].Clone("hChi2OverNdf")
+    for histo in hist_corry_prompt, hist_corry_nonprompt, hist_covariance_pnp, hist_covariance_pp, hist_covariance_npnp, hist_corrfrac_prompt, hist_corrfrac_nonprompt, hist_minimisation_status, hist_red_chi2:
+        histo.Reset()
+    hist_corry_prompt.GetYaxis().SetTitle("corrected yields prompt")
+    hist_corry_nonprompt.GetYaxis().SetTitle("corrected yields non-prompt")
+    hist_covariance_pnp.GetYaxis().SetTitle("#sigma(prompt, non-prompt)")
+    hist_covariance_pp.GetYaxis().SetTitle("#sigma(prompt, prompt)")
+    hist_covariance_npnp.GetYaxis().SetTitle("#sigma(non-prompt, non-prompt)")
+    hist_corrfrac_prompt.GetYaxis().SetTitle("corrected fraction prompt")
+    hist_corrfrac_nonprompt.GetYaxis().SetTitle("corrected fraction non-prompt")
+    hist_minimisation_status.GetYaxis().SetTitle("minimisation status")
+    hist_red_chi2.GetYaxis().SetTitle("#chi^{2}/ndf")
+    hist_minimisation_status_title = ""
+    for min_status in MinimisationStatus:
+        hist_minimisation_status_title += (str(min_status.value) + " = " + min_status.name + ", ")
+    hist_minimisation_status_title = hist_minimisation_status_title[:-2]
+    hist_minimisation_status.SetTitle(hist_minimisation_status_title)
+    set_object_style(
+        hist_corry_prompt,
+        color=ROOT.kRed + 1,
+        fillstyle=0,
+        markerstyle=ROOT.kFullCircle,
+    )
+    set_object_style(
+        hist_corry_nonprompt,
+        color=ROOT.kAzure + 4,
+        fillstyle=0,
+        markerstyle=ROOT.kFullSquare,
+    )
+    set_object_style(hist_covariance_pnp)
+    set_object_style(hist_covariance_pp)
+    set_object_style(hist_covariance_npnp)
+    set_object_style(hist_minimisation_status)
+    set_object_style(hist_red_chi2)
+    set_object_style(
+        hist_corrfrac_prompt,
+        color=ROOT.kRed + 1,
+        fillstyle=0,
+        markerstyle=ROOT.kFullCircle,
+    )
+    set_object_style(
+        hist_corrfrac_nonprompt,
+        color=ROOT.kAzure + 4,
+        fillstyle=0,
+        markerstyle=ROOT.kFullSquare,
+    )
+    if cfg["central_efficiency"]["computerawfrac"]:
+        hist_frac_raw_prompt = hist_rawy[0].Clone("hRawFracPrompt")
+        hist_frac_raw_nonprompt = hist_rawy[0].Clone("hRawFracNonPrompt")
+        for histo in hist_frac_raw_prompt, hist_frac_raw_nonprompt:
+            histo.Reset()
+        hist_frac_raw_prompt.GetYaxis().SetTitle("raw fraction prompt")
+        hist_frac_raw_nonprompt.GetYaxis().SetTitle("raw fraction non-prompt")
+        set_object_style(
+            hist_frac_raw_prompt,
+            color=ROOT.kRed + 1,
+            fillstyle=0,
+            markerstyle=ROOT.kFullSquare,
+        )
+
+        set_object_style(
+            hist_frac_raw_nonprompt,
+            color=ROOT.kAzure + 4,
+            fillstyle=0,
+            markerstyle=ROOT.kFullSquare,
+        )
+
+    pt_bin_to_process_name_suffix = ""
+    if pt_bin_to_process != -1:
+        pt_bin_to_process_name_suffix = "_bin_" + str(pt_bin_to_process)
+
+    output_name_template = cfg['output']['file'].replace(".root", "") + pt_bin_to_process_name_suffix + ".root"
+    output = ROOT.TFile(os.path.join(cfg["output"]["directory"], output_name_template), "recreate")
+    n_sets = len(hist_rawy)
+    pt_axis_title = hist_rawy[0].GetXaxis().GetTitle()
+    for ipt in range(hist_rawy[0].GetNbinsX()):
+        if pt_bin_to_process !=-1 and ipt+1 != pt_bin_to_process:
+            continue
+        all_vectors_monotonous = MinimisationStatus.Success
+        pt_min = hist_rawy[0].GetXaxis().GetBinLowEdge(ipt + 1)
+        pt_max = hist_rawy[0].GetXaxis().GetBinUpEdge(ipt + 1)
+        print(f"\n\nINFO: processing pt range {ipt+1} from {pt_min} to {pt_max} {pt_axis_title}")
+
+        rawy, effp, effnp, unc_rawy, unc_effp, unc_effnp = (np.zeros(n_sets) for _ in range(6))
+        for iset, (hrawy, heffp, heffnp) in enumerate(zip(hist_rawy, hist_effp, hist_effnp)):
+            rawy[iset] = hrawy.GetBinContent(ipt + 1)
+            effp[iset] = heffp.GetBinContent(ipt + 1)
+            effnp[iset] = heffnp.GetBinContent(ipt + 1)
+            unc_rawy[iset] = hrawy.GetBinError(ipt + 1)
+            unc_effp[iset] = heffp.GetBinError(ipt + 1)
+            unc_effnp[iset] = heffnp.GetBinError(ipt + 1)
+
+        if cfg["minimisation"]["correlated"]:
+            if not (np.all(rawy[1:] > rawy[:-1]) or np.all(rawy[1:] < rawy[:-1])):
+                all_vectors_monotonous = MinimisationStatus.MonotonyViolation
+                print("\0\33[33mWARNING! main(): the raw yield vector is not monotonous. Check the input for stability.\0\33[0m")
+                print(f"raw yield vector elements = {rawy}\n")
+            if not (np.all(unc_rawy[1:] > unc_rawy[:-1]) or np.all(unc_rawy[1:] < unc_rawy[:-1])):
+                all_vectors_monotonous = MinimisationStatus.MonotonyViolation
+                print("\0\33[33mWARNING! main(): the raw yield uncertainties vector is not monotonous. Check the input for stability.\0\33[0m")
+                print(f"raw yield uncertainties vector elements = {unc_rawy}\n")
+            if not (np.all(effp[1:] > effp[:-1]) or np.all(effp[1:] < effp[:-1])):
+                sys.exit("\33[31mFatal error: the prompt efficiency vector is not monotonous. Check the input. Exit.\33[0m")
+            if not (np.all(effnp[1:] > effnp[:-1]) or np.all(effnp[1:] < effnp[:-1])):
+                sys.exit("\33[31mFatal error: the nonprompt efficiency vector is not monotonous. Check the input. Exit.\33[0m")
+
+        minimiser = CutVarMinimiser(rawy, effp, effnp, unc_rawy, unc_effp, unc_effnp)
+        status = minimiser.minimise_system(cfg["minimisation"]["correlated"])
+
+        if status != MinimisationStatus.Fail:
+            hist_corry_prompt.SetBinContent(ipt + 1, minimiser.get_prompt_yield_and_error()[0])
+            hist_corry_prompt.SetBinError(ipt + 1, minimiser.get_prompt_yield_and_error()[1])
+            hist_corry_nonprompt.SetBinContent(ipt + 1, minimiser.get_nonprompt_yield_and_error()[0])
+            hist_corry_nonprompt.SetBinError(ipt + 1, minimiser.get_nonprompt_yield_and_error()[1])
+            hist_covariance_pnp.SetBinContent(ipt + 1, minimiser.get_prompt_nonprompt_cov())
+            hist_covariance_pnp.SetBinError(ipt + 1, 0)
+            hist_covariance_pp.SetBinContent(ipt + 1, minimiser.get_prompt_prompt_cov())
+            hist_covariance_pp.SetBinError(ipt + 1, 0)
+            hist_covariance_npnp.SetBinContent(ipt + 1, minimiser.get_nonprompt_nonprompt_cov())
+            hist_covariance_npnp.SetBinError(ipt + 1, 0)
+            corr_frac_prompt = minimiser.get_corr_prompt_fraction()
+            corr_frac_nonprompt = minimiser.get_corr_nonprompt_fraction()
+            hist_corrfrac_prompt.SetBinContent(ipt + 1, corr_frac_prompt[0])
+            hist_corrfrac_prompt.SetBinError(ipt + 1, corr_frac_prompt[1])
+            hist_corrfrac_nonprompt.SetBinContent(ipt + 1, corr_frac_nonprompt[0])
+            hist_corrfrac_nonprompt.SetBinError(ipt + 1, corr_frac_nonprompt[1])
+            hist_minimisation_status.SetBinContent(ipt + 1, max(status, all_vectors_monotonous))
+            hist_red_chi2.SetBinContent(ipt + 1, minimiser.get_red_chi2())
+            if cfg["central_efficiency"]["computerawfrac"]:
+                raw_frac_prompt = minimiser.get_raw_prompt_fraction(
+                    hist_central_effp.GetBinContent(ipt + 1), hist_central_effnp.GetBinContent(ipt + 1)
+                )
+                raw_frac_nonprompt = minimiser.get_raw_nonprompt_fraction(
+                    hist_central_effp.GetBinContent(ipt + 1), hist_central_effnp.GetBinContent(ipt + 1)
+                )
+                hist_frac_raw_prompt.SetBinContent(ipt + 1, raw_frac_prompt[0])
+                hist_frac_raw_prompt.SetBinError(ipt + 1, raw_frac_prompt[1])
+                hist_frac_raw_nonprompt.SetBinContent(ipt + 1, raw_frac_nonprompt[0])
+                hist_frac_raw_nonprompt.SetBinError(ipt + 1, raw_frac_nonprompt[1])
+
+            hist_bin_title = f"bin # {ipt+1}; {pt_axis_title}#in ({pt_min}; {pt_max})"
+
+            hist_bin_title_rawy = hist_bin_title if is_draw_title[PlotType.Rawy] else ""
+            canv_rawy, histos_rawy, _leg_r = minimiser.plot_result(f"_pt_{pt_min}_to_{pt_max}", hist_bin_title_rawy)
+            output.cd()
+            if is_save_to_root_file[ObjectToSave.Canvas]:
+                canv_rawy.Write()
+            if is_save_to_root_file[ObjectToSave.RawYield]:
+                for _, hist in histos_rawy.values():
+                    hist.Write()
+            if is_save_canvas_as_macro[PlotType.Rawy]:
+                canv_rawy.SaveAs(f"canv_rawy_{ipt+1}.C")
+
+            hist_bin_title_unc = hist_bin_title if is_draw_title[PlotType.Unc] else ""
+            canv_unc, histos_unc, _leg_unc = minimiser.plot_uncertainties(f"_pt_{pt_min}_to_{pt_max}", hist_bin_title_unc)
+            output.cd()
+            if is_save_to_root_file[ObjectToSave.Canvas]:
+                canv_unc.Write()
+            if is_save_to_root_file[ObjectToSave.Uncertainty]:
+                for _, hist in histos_unc.values():
+                    hist.Write()
+            if is_save_canvas_as_macro[PlotType.Unc]:
+                canv_unc.SaveAs(f"canv_unc_{ipt+1}.C")
+
+            hist_bin_title_rel_unc = hist_bin_title if is_draw_title[PlotType.RelUnc] else ""
+            canv_rel_unc, histos_rel_unc, _leg_rel_unc = minimiser.plot_relative_uncertainties(f"_pt_{pt_min}_to_{pt_max}", hist_bin_title_rel_unc)
+            output.cd()
+            if is_save_to_root_file[ObjectToSave.Canvas]:
+                canv_rel_unc.Write()
+            if is_save_to_root_file[ObjectToSave.Uncertainty]:
+                for _, hist in histos_rel_unc.values():
+                    hist.Write()
+            if is_save_canvas_as_macro[PlotType.RelUnc]:
+                canv_rel_unc.SaveAs(f"canv_rel_unc_{ipt+1}.C")
+
+            hist_bin_title_eff = hist_bin_title if is_draw_title[PlotType.Eff] else ""
+            canv_eff, histos_eff, _leg_e = minimiser.plot_efficiencies(f"_pt_{pt_min}_to_{pt_max}", hist_bin_title_eff)
+            output.cd()
+            if is_save_to_root_file[ObjectToSave.Canvas]:
+                canv_eff.Write()
+            if is_save_to_root_file[ObjectToSave.Efficiency]:
+                for _, hist in histos_eff.values():
+                    hist.Write()
+            if is_save_canvas_as_macro[PlotType.Eff]:
+                canv_eff.SaveAs(f"canv_eff_{ipt+1}.C")
+
+            hist_bin_title_frac = hist_bin_title if is_draw_title[PlotType.Frac] else ""
+            canv_frac, histos_frac, _leg_f = minimiser.plot_fractions(f"_pt_{pt_min}_to_{pt_max}", hist_bin_title_frac)
+            output.cd()
+            if is_save_to_root_file[ObjectToSave.Canvas]:
+                canv_frac.Write()
+            if is_save_to_root_file[ObjectToSave.Fraction]:
+                for _, hist in histos_frac.values():
+                    hist.Write()
+            if is_save_canvas_as_macro[PlotType.Frac]:
+                canv_frac.SaveAs(f"canv_frac_{ipt+1}.C")
+
+            hist_bin_title_cov = hist_bin_title if is_draw_title[PlotType.Cov] else ""
+            canv_cov, histo_cov = minimiser.plot_cov_matrix(True, f"_pt_{pt_min}_to_{pt_max}", hist_bin_title_cov)
+            output.cd()
+            if is_save_to_root_file[ObjectToSave.Canvas]:
+                canv_cov.Write()
+            if is_save_to_root_file[ObjectToSave.CorrelationMatrix]:
+                histo_cov.Write()
+            if is_save_canvas_as_macro[PlotType.Cov]:
+                canv_cov.SaveAs(f"canv_cov_{ipt+1}.C")
+        else:
+            print(f"Minimization for pT {pt_min}, {pt_max} not successful")
+            hist_minimisation_status.SetBinContent(ipt + 1, MinimisationStatus.Fail)
+            canv_rawy = ROOT.TCanvas("c_rawy_minimization_error", "Minimization error", 500, 500)
+            canv_eff = ROOT.TCanvas("c_eff_minimization_error", "Minimization error", 500, 500)
+            canv_frac = ROOT.TCanvas("c_frac_minimization_error", "Minimization error", 500, 500)
+            canv_cov = ROOT.TCanvas("c_conv_minimization_error", "Minimization error", 500, 500)
+            canv_unc = ROOT.TCanvas("c_unc_minimization_error", "Minimization error", 500, 500)
+            canv_rel_unc = ROOT.TCanvas("c_rel_unc_minimization_error", "Minimization error", 500, 500)
+
+        canv_combined = ROOT.TCanvas(f"canv_combined_{ipt}", "", 1000, 1000)
+        canv_combined.Divide(2, 2)
+        canv_combined.cd(1)
+        canv_rawy.DrawClonePad()
+        canv_combined.cd(2)
+        canv_eff.DrawClonePad()
+        canv_combined.cd(3)
+        canv_frac.DrawClonePad()
+        canv_combined.cd(4)
+        canv_cov.DrawClonePad()
+
+        output_name_template = output_name_template.replace('.root', '.pdf')
+
+        output_name_rawy_pdf = f"Distr_{output_name_template}"
+        output_name_eff_pdf = f"Eff_{output_name_template}"
+        output_name_frac_pdf = f"Frac_{output_name_template}"
+        output_name_covmat_pdf = f"CovMatrix_{output_name_template}"
+        output_name_unc_pdf = f"Unc_{output_name_template}"
+        output_name_rel_unc_pdf = f"RelUnc_{output_name_template}"
+        output_name_pdf = f"{output_name_template}"
+
+        if hist_rawy[0].GetNbinsX() == 1 or pt_bin_to_process != -1:
+            print_bracket = ""
+        elif ipt == 0:
+            print_bracket = "("
+        elif ipt == hist_rawy[0].GetNbinsX() - 1:
+            print_bracket = ")"
+        else:
+            print_bracket = ""
+        canv_rawy.Print(f"{os.path.join(cfg['output']['directory'], output_name_rawy_pdf)}{print_bracket}")
+        canv_eff.Print(f"{os.path.join(cfg['output']['directory'], output_name_eff_pdf)}{print_bracket}")
+        canv_frac.Print(f"{os.path.join(cfg['output']['directory'], output_name_frac_pdf)}{print_bracket}")
+        canv_cov.Print(f"{os.path.join(cfg['output']['directory'], output_name_covmat_pdf)}{print_bracket}")
+        canv_combined.Print(f"{os.path.join(cfg['output']['directory'], output_name_pdf)}{print_bracket}")
+        canv_unc.Print(f"{os.path.join(cfg['output']['directory'], output_name_unc_pdf)}{print_bracket}")
+        canv_rel_unc.Print(f"{os.path.join(cfg['output']['directory'], output_name_rel_unc_pdf)}{print_bracket}")
+
+    output.cd()
+    if is_save_to_root_file[ObjectToSave.CorrectedYield]:
+        hist_corry_prompt.Write()
+        hist_corry_nonprompt.Write()
+    if is_save_to_root_file[ObjectToSave.Covariance]:
+        hist_covariance_pnp.Write()
+        hist_covariance_pp.Write()
+        hist_covariance_npnp.Write()
+    if is_save_to_root_file[ObjectToSave.CorrectedFraction]:
+        hist_corrfrac_prompt.Write()
+        hist_corrfrac_nonprompt.Write()
+    if is_save_to_root_file[ObjectToSave.MinimisationStatus]:
+        hist_minimisation_status.Write()
+        hist_red_chi2.Write()
+    if cfg["central_efficiency"]["computerawfrac"]:
+        hist_frac_raw_prompt.Write()
+        hist_frac_raw_nonprompt.Write()
+    output.Close()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Arguments")
+    parser.add_argument(
+        "config",
+        metavar="text",
+        default="config_cutvar_example.json",
+        help="JSON config file",
+    )
+    args = parser.parse_args()
+
+    main(args.config)

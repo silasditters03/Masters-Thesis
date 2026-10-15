@@ -1,0 +1,104 @@
+{
+    "rawyields": {
+        "inputdir": "path/to/RawYields/files",
+        "inputfiles": [
+            "RawYieldsDplus_outFD_pos10.root",
+            "RawYieldsDplus_outFD_pos11.root",
+            "RawYieldsDplus_outFD_pos12.root",
+            "RawYieldsDplus_outFD_pos13.root",
+            "RawYieldsDplus_outFD_pos14.root",
+            "RawYieldsDplus_outFD_pos15.root",
+            "RawYieldsDplus_outFD_pos16.root",
+            "RawYieldsDplus_outFD_pos17.root",
+            "RawYieldsDplus_outFD_pos18.root",
+            "RawYieldsDplus_outFD_pos19.root",
+            "RawYieldsDplus_outFD_pos20.root",
+            "RawYieldsDplus_outFD_pos21.root",
+            "RawYieldsDplus_outFD_pos22.root",
+            "RawYieldsDplus_outFD_pos23.root",
+            "RawYieldsDplus_outFD_pos24.root",
+            "RawYieldsDplus_outFD_pos25.root",
+            "RawYieldsDplus_outFD_pos26.root",
+            "RawYieldsDplus_outFD_pos27.root",
+            "RawYieldsDplus_outFD_pos28.root",
+            "RawYieldsDplus_outFD_pos29.root"
+        ],
+        "histoname": "hRawYields"
+    },
+    "efficiencies": {
+        "inputdir": "path/to/efficiencies/files",
+        "inputfiles": [
+            "Eff_times_Acc_Dplus_outFD_pos10.root",
+            "Eff_times_Acc_Dplus_outFD_pos11.root",
+            "Eff_times_Acc_Dplus_outFD_pos12.root",
+            "Eff_times_Acc_Dplus_outFD_pos13.root",
+            "Eff_times_Acc_Dplus_outFD_pos14.root",
+            "Eff_times_Acc_Dplus_outFD_pos15.root",
+            "Eff_times_Acc_Dplus_outFD_pos16.root",
+            "Eff_times_Acc_Dplus_outFD_pos17.root",
+            "Eff_times_Acc_Dplus_outFD_pos18.root",
+            "Eff_times_Acc_Dplus_outFD_pos19.root",
+            "Eff_times_Acc_Dplus_outFD_pos20.root",
+            "Eff_times_Acc_Dplus_outFD_pos21.root",
+            "Eff_times_Acc_Dplus_outFD_pos22.root",
+            "Eff_times_Acc_Dplus_outFD_pos23.root",
+            "Eff_times_Acc_Dplus_outFD_pos24.root",
+            "Eff_times_Acc_Dplus_outFD_pos25.root",
+            "Eff_times_Acc_Dplus_outFD_pos26.root",
+            "Eff_times_Acc_Dplus_outFD_pos27.root",
+            "Eff_times_Acc_Dplus_outFD_pos28.root",
+            "Eff_times_Acc_Dplus_outFD_pos29.root"
+        ],
+        "histonames": {
+            "prompt": "hAccEffPrompt",
+            "nonprompt": "hAccEffFD"
+        }
+    },
+    "minimisation": {
+        "correlated": true
+    },
+    "is_draw_title": {
+        "rawy": true,
+        "frac": false,
+        "eff": false,
+        "cov": false,
+        "unc": true,
+        "relunc": true
+    },
+    "is_save_canvas_as_macro": {
+        "rawy": false,
+        "frac": false,
+        "eff": false,
+        "cov": false,
+        "unc": false,
+        "relunc": false
+    },
+    "is_save_to_root_file": {
+        "canvas": true,
+        "raw_yield": true,
+        "uncertainty": true,
+        "efficiency": true,
+        "fraction": true,
+        "corrected_yield": true,
+        "correlation_matrix": true,
+        "covariance": true,
+        "corrected_fraction": true,
+        "minimisation_status": true
+    },
+    "central_efficiency": {
+        "computerawfrac": true,
+        "inputdir": "path/to/central/efficiency",
+        "inputfile": "efficiency.root",
+        "histonames": {
+            "prompt": "hAccEffPrompt",
+            "nonprompt": "hAccEffFD"
+        }
+    },
+    "output": {
+        "directory": ".",
+        "file": "CutVarDplus_pp13TeV_MB.root"
+    },
+    "zero_eff_unc": false,
+    "effp_shift_nsigma": 0,
+    "effnp_shift_nsigma": 0
+}
