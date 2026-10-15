@@ -9,12 +9,26 @@ project(MyThesisAnalysis)
 find_package(O2 REQUIRED)
 find_package(O2Physics REQUIRED)
 
-# Point to the official tutorial file
+# Point to the official tutorial files: <executable name> <source file>
 add_executable(tutorial-task collisionTracksIteration.cxx)
+add_executable(tutorial-histograms histograms.cxx)
+add_executable(tutorial-newcollections newCollections.cxx)
+add_executable(tutorial-associated-example associatedExample.cxx)
 
-target_include_directories(tutorial-task PUBLIC 
-    $ENV{O2_ROOT}/include 
-    $ENV{O2PHYSICS_ROOT}/include
+set(TUTORIAL_TARGETS
+    tutorial-task
+    tutorial-histograms
+    tutorial-newcollections
+    tutorial-associated-example
 )
 
-target_link_libraries(tutorial-task PUBLIC O2::Framework)
+foreach(target IN LISTS TUTORIAL_TARGETS)
+  # Include directories
+  target_include_directories(${target} PUBLIC
+      $ENV{O2_ROOT}/include
+      $ENV{O2PHYSICS_ROOT}/include
+  )
+
+  # Link libraries
+  target_link_libraries(${target} PUBLIC O2::Framework)
+endforeach()

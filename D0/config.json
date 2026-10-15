@@ -1,0 +1,13 @@
+{
+    "hf-task-d0": {
+        "processMcWithDCAFitterN": "true"
+    },
+    "hf-candidate-creator-2prong-expressions": {
+        "processMc": "true"
+    },
+    "hf-pid-creator": {
+        "processDummy": "false",
+        "processFullPi": "true",
+        "processFullKa": "true"
+    }
+}

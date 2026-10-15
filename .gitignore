@@ -1,0 +1,19 @@
+# O2Physics and aliBuild installation
+/alice/
+
+# ROOT data
+*.root
+
+# Build outputs
+build/
+Build/
+
+# Logs
+*.log
+
+# Backup files
+*.bak
+*.bak2
+
+# macOS
+.DS_Store
