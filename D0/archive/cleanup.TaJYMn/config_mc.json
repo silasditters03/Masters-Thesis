@@ -1,0 +1,29 @@
+
+    
+  
+{
+  "hf-task-d0": {
+    "processDataWithDCAFitterN": "false",
+    "processMcWithDCAFitterN": "true"
+  },
+  "tof-signal": {
+  "reconstructionPass": "metadata"
+  },
+  "hf-candidate-creator-2prong-expressions": {
+    "processMc": "true"
+  },
+  "hf-pid-creator": {
+    "processDummy": "false",
+    "processFullPi": "true",
+    "processFullKa": "true"
+  },
+  "mult-cent-table": {
+    "autoConfigureProcess": "false",
+    "processRun2": "false",
+    "processRun3": "true",
+    "processMonteCarlo": "true",
+    "processCentralityRun2": "false",
+    "processCentralityRun3": "false"
+  }
+}
+

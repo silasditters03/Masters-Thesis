@@ -1,0 +1,49 @@
+
+    
+  
+{
+  "track-selection": {
+    "isRun3": "true",
+    "itsMatching": "1"
+  },
+  "propagation-service": {
+    "processRealData": "false",
+    "processMonteCarlo": "true",
+    "useTrackTuner": "false"
+  },
+  "hf-task-d0": {
+    "processDataWithDCAFitterN": "false",
+    "processMcWithDCAFitterN": "true"
+  },
+  "tof-signal": {
+    "reconstructionPass": "unanchored",
+    "autoSetProcessFunctions": "false",
+    "processRun2": "false",
+    "processRun3": "true"
+  },
+  "tof-event-time": {
+    "processRun2": "false",
+    "processRun3": "true"
+  },
+  "tof-pid-merge": {
+    "processRun2": "false",
+    "processRun3": "true"
+  },
+  "hf-candidate-creator-2prong-expressions": {
+    "processMc": "true"
+  },
+  "hf-pid-creator": {
+    "processDummy": "false",
+    "processFullPi": "true",
+    "processFullKa": "true"
+  },
+  "mult-cent-table": {
+    "autoConfigureProcess": "false",
+    "processRun2": "false",
+    "processRun3": "true",
+    "processMonteCarlo": "true",
+    "processCentralityRun2": "false",
+    "processCentralityRun3": "false"
+  }
+}
+
