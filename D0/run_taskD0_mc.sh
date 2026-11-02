@@ -82,9 +82,13 @@ printf 'Workflow: %s\n' "${stages[*]}"
 run_stage() {
   local index="$1"
   if (( index == ${#stages[@]} - 1 )); then
-    "${stages[index]}" "${args[@]}" --run --aod-file "$INPUT_FILE" "${@:2}"
+    "${stages[index]}" "${args[@]}" --run --aod-file "$INPUT_FILE" \
+      --shm-segment-size 4000000000 \
+      --aod-memory-rate-limit 1000000000 \
+      "${@:2}"
   else
-    "${stages[index]}" "${args[@]}" | run_stage "$((index + 1))" "${@:2}"
+    "${stages[index]}" "${args[@]}" |
+      run_stage "$((index + 1))" "${@:2}"
   fi
 }
 run_stage 0 "$@"
