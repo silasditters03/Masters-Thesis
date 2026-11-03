@@ -9,8 +9,20 @@
     "useTrackTuner": "false"
   },
   "hf-task-d0": {
-    "processDataWithDCAFitterN": "false",
-    "processMcWithDCAFitterN": "true"
+    "processDataWithDCAFitterN": "true",
+    "processMcWithDCAFitterN": "true",
+    "processDataWithDCAFitterNCent": "false",
+    "processDataWithKFParticle": "false",
+    "processDataWithDCAFitterNMl": "false",
+    "processDataWithDCAFitterNMlCent": "false",
+    "processDataWithKFParticleMl": "false",
+    "processMcWithDCAFitterNCent": "false",
+    "processMcWithKFParticle": "false",
+    "processMcWithDCAFitterNMl": "false",
+    "processMcWithDCAFitterNMlCent": "false",
+    "processMcWithKFParticleMl": "false",
+    "processDataWithDCAFitterNWithUpc": "false",
+    "processDataWithDCAFitterNMlWithUpc": "false"
   },
   "tof-signal": {
     "reconstructionPass": "unanchored",
