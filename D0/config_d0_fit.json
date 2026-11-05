@@ -1,0 +1,36 @@
+{
+  "IsMC": false,
+  "Particle": "D0",
+
+  "InFileName": "/Users/ml2024/SilasThesis/Masters-Thesis/D0/DataPlots.root",
+  "InputHistoName": [
+   "histograms/reco/hMassFinerBinning_1D"
+],
+
+  "OutFileName": "/Users/ml2024/SilasThesis/Masters-Thesis/D0/D0MassFit.root",
+
+  "SliceVarName": "sample",
+  "SliceVarUnit": "",
+  "SliceVarMin": [0.0],
+  "SliceVarMax": [1.0],
+
+  "MassMin": 1.72,
+  "MassMax": 2.02,
+  "Rebin": 1,
+
+  "BkgFunc": 0,
+  "SgnFunc": 0,
+  "UseLikelihood": true,
+
+  "FixMean": false,
+  "FixSigma": false,
+  "EnableRefl": false,
+  "InclSecPeak": false,
+
+  "WriteSignalPar": true,
+  "DrawBgPrefit": true,
+  "HighlightPeakRegion": true,
+  "NSigmaForSideband": 3.0,
+  "NSigmaForSignal": 3.0,
+  "RandomSeed": 42
+}
