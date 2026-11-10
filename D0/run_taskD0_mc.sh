@@ -1,6 +1,3 @@
-
-    
-  
 #!/usr/bin/env bash
 # Run 3 MC, DCAFitterN, no PV refit, no reconstructed-centrality selection.
 # Load a compatible O2Physics environment before running this script.

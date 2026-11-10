@@ -209,8 +209,8 @@ public:
     canvas.Clear();
 
     // Raw counts: no normalization.
-    signal->SetLineColor(kBlue + 1);
-    background->SetLineColor(kRed + 1);
+    signal->SetLineColor(kRed + 1);
+    background->SetLineColor(kBlue + 1);
     signal->SetLineWidth(2);
     background->SetLineWidth(2);
 
