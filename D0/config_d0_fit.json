@@ -2,7 +2,7 @@
   "IsMC": false,
   "Particle": "D0",
 
-  "InFileName": "/Users/ml2024/SilasThesis/Masters-Thesis/D0/DataPlots.root",
+  "InFileName": "/Users/ml2024/SilasThesis/Masters-Thesis/D0/D0PlotData.root",
   "InputHistoName": [
    "histograms/reco/hMassFinerBinning_1D"
 ],
