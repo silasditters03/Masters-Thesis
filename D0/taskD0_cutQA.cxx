@@ -9,9 +9,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//THIS IS AN EDITED VERSION MADE BY SILAS DITTERS
+// Custom D0 task: original analysis with 28 MC selector-observable QA histograms.
 
-/// \file taskD0.cxx
+/// \file taskD0_cutQA.cxx
 /// \brief D0 analysis task
 ///
 /// \author Gian Michele Innocenti <gian.michele.innocenti@cern.ch>, CERN
@@ -138,8 +138,7 @@ struct HfTaskD0 {
   using CollisionsWithMcLabels = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::PVMults>;
   using CollisionsWithMcLabelsCent = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::PVMults, aod::CentFT0Ms, aod::CentFT0Cs>;
   using McCollisionsWithCentrality = soa::Join<aod::McCollisions, aod::McCentFT0Cs, aod::McCentFT0Ms>;
-  using TracksSelQuality = soa::Join<aod::TracksExtra, aod::TracksWMc>;
-  using TracksDcaCutQA = soa::Join<aod::Tracks, aod::TracksDCA>; // additional read-only input, MC QA
+  using TracksSelQuality = soa::Join<aod::TracksExtra, aod::TracksWMc, aod::TracksDCA>; // single index target including DCA for MC QA
   using TracksWPid = soa::Join<o2::aod::FullTracks, aod::TracksDCA, o2::aod::TrackSelection, aod::TracksPidPi, aod::PidTpcTofFullPi, aod::TracksPidKa, aod::PidTpcTofFullKa, aod::TracksPidPr, aod::PidTpcTofFullPr>;
   // using TracksWithExtra = o2::soa::Join<o2::aod::FullTracks, o2::aod::TrackSelection>;
   Filter filterD0Flag = (o2::aod::hf_track_index::hfflag & static_cast<uint8_t>(BIT(aod::hf_cand_2prong::DecayType::D0ToPiK))) != static_cast<uint8_t>(0);
@@ -315,124 +314,43 @@ struct HfTaskD0 {
     registry.add("hDecLengthVsPtSig", "2-prong candidates;decay length (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     registry.add("hDecLengthxyVsPtSig", "2-prong candidates;decay length xy (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
 
-    // BEGIN ADDITIVE SELECTOR CUT QA: 14 physical observables for all 15 D0 selector cuts.
-    // Each TH2: X = exact selector quantity, Y = reconstructed D0 candidate pT.
-    // Stage Pre: after MC task HFFlag/rapidity prefilters, before D0 selector decision.
-    // Stage Post: after isSelD0/isSelD0bar acceptance (includes PID/other cuts).
-    // Truth per hypothesis: Sig means correct matched MC charge, Bkg includes reflections.
-    registry.add("cutQA/m_D0_Pre_Sig", "D0 Pre Sig;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0_Pre_Sig", "D0 Pre Sig;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0_Pre_Sig", "D0 Pre Sig;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0_Pre_Sig", "D0 Pre Sig;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0_Pre_Sig", "D0 Pre Sig;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0_Pre_Sig", "D0 Pre Sig;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0_Pre_Sig", "D0 Pre Sig;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0_Pre_Sig", "D0 Pre Sig;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0_Pre_Sig", "D0 Pre Sig;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0_Pre_Sig", "D0 Pre Sig;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0_Pre_Sig", "D0 Pre Sig;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0_Pre_Sig", "D0 Pre Sig;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0_Pre_Sig", "D0 Pre Sig;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0_Pre_Sig", "D0 Pre Sig;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/m_D0_Pre_Bkg", "D0 Pre Bkg;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0_Pre_Bkg", "D0 Pre Bkg;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0_Pre_Bkg", "D0 Pre Bkg;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0_Pre_Bkg", "D0 Pre Bkg;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0_Pre_Bkg", "D0 Pre Bkg;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0_Pre_Bkg", "D0 Pre Bkg;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0_Pre_Bkg", "D0 Pre Bkg;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0_Pre_Bkg", "D0 Pre Bkg;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0_Pre_Bkg", "D0 Pre Bkg;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0_Pre_Bkg", "D0 Pre Bkg;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0_Pre_Bkg", "D0 Pre Bkg;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0_Pre_Bkg", "D0 Pre Bkg;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0_Pre_Bkg", "D0 Pre Bkg;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0_Pre_Bkg", "D0 Pre Bkg;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/m_D0_Post_Sig", "D0 Post Sig;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0_Post_Sig", "D0 Post Sig;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0_Post_Sig", "D0 Post Sig;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0_Post_Sig", "D0 Post Sig;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0_Post_Sig", "D0 Post Sig;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0_Post_Sig", "D0 Post Sig;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0_Post_Sig", "D0 Post Sig;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0_Post_Sig", "D0 Post Sig;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0_Post_Sig", "D0 Post Sig;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0_Post_Sig", "D0 Post Sig;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0_Post_Sig", "D0 Post Sig;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0_Post_Sig", "D0 Post Sig;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0_Post_Sig", "D0 Post Sig;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0_Post_Sig", "D0 Post Sig;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/m_D0_Post_Bkg", "D0 Post Bkg;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0_Post_Bkg", "D0 Post Bkg;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0_Post_Bkg", "D0 Post Bkg;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0_Post_Bkg", "D0 Post Bkg;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0_Post_Bkg", "D0 Post Bkg;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0_Post_Bkg", "D0 Post Bkg;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0_Post_Bkg", "D0 Post Bkg;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0_Post_Bkg", "D0 Post Bkg;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0_Post_Bkg", "D0 Post Bkg;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0_Post_Bkg", "D0 Post Bkg;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0_Post_Bkg", "D0 Post Bkg;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0_Post_Bkg", "D0 Post Bkg;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0_Post_Bkg", "D0 Post Bkg;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0_Post_Bkg", "D0 Post Bkg;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/m_D0bar_Pre_Sig", "D0bar Pre Sig;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0bar_Pre_Sig", "D0bar Pre Sig;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0bar_Pre_Sig", "D0bar Pre Sig;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0bar_Pre_Sig", "D0bar Pre Sig;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0bar_Pre_Sig", "D0bar Pre Sig;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0bar_Pre_Sig", "D0bar Pre Sig;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0bar_Pre_Sig", "D0bar Pre Sig;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0bar_Pre_Sig", "D0bar Pre Sig;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0bar_Pre_Sig", "D0bar Pre Sig;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0bar_Pre_Sig", "D0bar Pre Sig;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0bar_Pre_Sig", "D0bar Pre Sig;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0bar_Pre_Sig", "D0bar Pre Sig;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0bar_Pre_Sig", "D0bar Pre Sig;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0bar_Pre_Sig", "D0bar Pre Sig;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/m_D0bar_Pre_Bkg", "D0bar Pre Bkg;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0bar_Pre_Bkg", "D0bar Pre Bkg;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0bar_Pre_Bkg", "D0bar Pre Bkg;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0bar_Pre_Bkg", "D0bar Pre Bkg;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0bar_Pre_Bkg", "D0bar Pre Bkg;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0bar_Pre_Bkg", "D0bar Pre Bkg;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0bar_Pre_Bkg", "D0bar Pre Bkg;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0bar_Pre_Bkg", "D0bar Pre Bkg;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0bar_Pre_Bkg", "D0bar Pre Bkg;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0bar_Pre_Bkg", "D0bar Pre Bkg;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0bar_Pre_Bkg", "D0bar Pre Bkg;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0bar_Pre_Bkg", "D0bar Pre Bkg;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0bar_Pre_Bkg", "D0bar Pre Bkg;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0bar_Pre_Bkg", "D0bar Pre Bkg;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/m_D0bar_Post_Sig", "D0bar Post Sig;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0bar_Post_Sig", "D0bar Post Sig;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0bar_Post_Sig", "D0bar Post Sig;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0bar_Post_Sig", "D0bar Post Sig;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0bar_Post_Sig", "D0bar Post Sig;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0bar_Post_Sig", "D0bar Post Sig;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0bar_Post_Sig", "D0bar Post Sig;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0bar_Post_Sig", "D0bar Post Sig;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0bar_Post_Sig", "D0bar Post Sig;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0bar_Post_Sig", "D0bar Post Sig;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0bar_Post_Sig", "D0bar Post Sig;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0bar_Post_Sig", "D0bar Post Sig;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0bar_Post_Sig", "D0bar Post Sig;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0bar_Post_Sig", "D0bar Post Sig;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/m_D0bar_Post_Bkg", "D0bar Post Bkg;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/DCA_D0bar_Post_Bkg", "D0bar Post Bkg;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cosThetaStar_D0bar_Post_Bkg", "D0bar Post Bkg;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptK_D0bar_Post_Bkg", "D0bar Post Bkg;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/ptPi_D0bar_Post_Bkg", "D0bar Post Bkg;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0K_D0bar_Post_Bkg", "D0bar Post Bkg;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0pi_D0bar_Post_Bkg", "D0bar Post Bkg;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/d0d0_D0bar_Post_Bkg", "D0bar Post Bkg;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpa_D0bar_Post_Bkg", "D0bar Post Bkg;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/cpaXY_D0bar_Post_Bkg", "D0bar Post Bkg;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDecLenXY_D0bar_Post_Bkg", "D0bar Post Bkg;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLen_D0bar_Post_Bkg", "D0bar Post Bkg;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/decLenXY_D0bar_Post_Bkg", "D0bar Post Bkg;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    registry.add("cutQA/normDauIPXYMin_D0bar_Post_Bkg", "D0bar Post Bkg;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
-    // END ADDITIVE SELECTOR CUT QA
+    // Selector-observable QA (MC): D0 and D0bar hypotheses combined.
+    // For each of 14 distinct observables, store one signal and one background TH2.
+    // X = selector observable; Y = reconstructed candidate pT.
+    // Filled after the MC task's HFFlag/rapidity prefilters, independently of
+    // isSelD0/isSelD0bar. The upstream reconstruction filters still apply.
+    // Truth classification is made separately for each mass hypothesis:
+    // correct-sign MC match -> signal; otherwise -> background (reflections included).
+    // Both mass hypotheses contribute; this counts hypotheses, not unique candidates.
+    registry.add("cutQA/m_Sig", "D^{0} + #bar{D}^{0} signal;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/m_Bkg", "D^{0} + #bar{D}^{0} background;abs(m_{K#pi} - m_{D^{0}}) (GeV/c^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/DCA_Sig", "D^{0} + #bar{D}^{0} signal;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/DCA_Bkg", "D^{0} + #bar{D}^{0} background;abs(D^{0} transverse impact parameter) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/cosThetaStar_Sig", "D^{0} + #bar{D}^{0} signal;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/cosThetaStar_Bkg", "D^{0} + #bar{D}^{0} background;abs(cos #theta*);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{100, 0.0, 1.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/ptK_Sig", "D^{0} + #bar{D}^{0} signal;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/ptK_Bkg", "D^{0} + #bar{D}^{0} background;p_{T}(K) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/ptPi_Sig", "D^{0} + #bar{D}^{0} signal;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/ptPi_Bkg", "D^{0} + #bar{D}^{0} background;p_{T}(#pi) (GeV/c);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{180, 0.0, 36.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/d0K_Sig", "D^{0} + #bar{D}^{0} signal;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/d0K_Bkg", "D^{0} + #bar{D}^{0} background;abs(track K DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/d0pi_Sig", "D^{0} + #bar{D}^{0} signal;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/d0pi_Bkg", "D^{0} + #bar{D}^{0} background;abs(track #pi DCA_{XY} to PV) (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 0.25}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/d0d0_Sig", "D^{0} + #bar{D}^{0} signal;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/d0d0_Bkg", "D^{0} + #bar{D}^{0} background;signed d_{0,0} d_{0,1} (cm^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{300, -0.03, 0.03}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/cpa_Sig", "D^{0} + #bar{D}^{0} signal;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/cpa_Bkg", "D^{0} + #bar{D}^{0} background;cos pointing angle;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/cpaXY_Sig", "D^{0} + #bar{D}^{0} signal;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/cpaXY_Bkg", "D^{0} + #bar{D}^{0} background;cos pointing angle XY;#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{220, -1.1, 1.1}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/normDecLenXY_Sig", "D^{0} + #bar{D}^{0} signal;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/normDecLenXY_Bkg", "D^{0} + #bar{D}^{0} background;L_{XY}/#sigma(L_{XY});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 40.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/decLen_Sig", "D^{0} + #bar{D}^{0} signal;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/decLen_Bkg", "D^{0} + #bar{D}^{0} background;decay length (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/decLenXY_Sig", "D^{0} + #bar{D}^{0} signal;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/decLenXY_Bkg", "D^{0} + #bar{D}^{0} background;decay length XY (cm);#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{250, 0.0, 2.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/normDauIPXYMin_Sig", "D^{0} + #bar{D}^{0} signal;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("cutQA/normDauIPXYMin_Bkg", "D^{0} + #bar{D}^{0} background;min(abs(d_{0,0}/#sigma_{0}), abs(d_{0,1}/#sigma_{1}));#it{p}_{T} (GeV/#it{c})", {HistType::kTH2F, {{200, 0.0, 20.0}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    // END SELECTOR-OBSERVABLE QA
 
 
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
@@ -1112,153 +1030,83 @@ struct HfTaskD0 {
   PROCESS_SWITCH(HfTaskD0, processDataWithKFParticleMl, "process taskD0 with KFParticle and ML selections", false);
   // TODO: add processKFParticleMlCent
 
-  // BEGIN ADDITIVE SELECTOR CUT QA (MC only).
-  // Never change legacy histograms or their signal/background counting.
-  // Exact single-track d0K/d0pi selector quantities require TracksDCA.
+  // QA for selector observables: fill once for each D0/D0bar mass hypothesis.
+  // No final-selector flag is required, so the cut distributions remain visible.
   template <typename Candidate, typename TrackPos, typename TrackNeg>
   void fillMcSelectorCutQA(const Candidate& candidate, const TrackPos& trackPos,
                            const TrackNeg& trackNeg, float massD0, float massD0bar)
   {
-    const auto ptCutQA = candidate.pt();
+    const float pt = candidate.pt();
+    const float dcaCandidate = std::abs(candidate.impactParameterXY());
+    const float impactParameterProduct = candidate.impactParameterProduct();
+    const float cpa = candidate.cpa();
+    const float cpaXY = candidate.cpaXY();
+    const float normDecLenXY = candidate.decayLengthXYNormalised();
+    const float decLen = candidate.decayLength();
+    const float decLenXY = candidate.decayLengthXY();
+    const float minNormDauIP = std::min(std::abs(candidate.impactParameterNormalised0()),
+                                       std::abs(candidate.impactParameterNormalised1()));
+
+    // The two hypotheses assign K/pi masses to opposite-charge tracks.
+    // A genuine D0 is signal for the D0 hypothesis and a reflection in D0bar,
+    // and vice versa. Unmatched candidates enter background for both.
     const auto signalDecay = o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK;
-    const bool isSignalD0 = candidate.flagMcMatchRec() == signalDecay;
-    const bool isSignalD0bar = candidate.flagMcMatchRec() == -signalDecay;
-    if (isSignalD0) {
-        registry.fill(HIST("cutQA/m_D0_Pre_Sig"), std::abs(massD0 - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0_Pre_Sig"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0_Pre_Sig"), std::abs(HfHelper::cosThetaStarD0(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0_Pre_Sig"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0_Pre_Sig"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0_Pre_Sig"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0_Pre_Sig"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0_Pre_Sig"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0_Pre_Sig"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0_Pre_Sig"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0_Pre_Sig"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0_Pre_Sig"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0_Pre_Sig"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0_Pre_Sig"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
-    } else {
-        registry.fill(HIST("cutQA/m_D0_Pre_Bkg"), std::abs(massD0 - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0_Pre_Bkg"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0_Pre_Bkg"), std::abs(HfHelper::cosThetaStarD0(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0_Pre_Bkg"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0_Pre_Bkg"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0_Pre_Bkg"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0_Pre_Bkg"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0_Pre_Bkg"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0_Pre_Bkg"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0_Pre_Bkg"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0_Pre_Bkg"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0_Pre_Bkg"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0_Pre_Bkg"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0_Pre_Bkg"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
-    }
-    if (candidate.isSelD0() >= selectionFlagD0) {
-      if (isSignalD0) {
-        registry.fill(HIST("cutQA/m_D0_Post_Sig"), std::abs(massD0 - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0_Post_Sig"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0_Post_Sig"), std::abs(HfHelper::cosThetaStarD0(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0_Post_Sig"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0_Post_Sig"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0_Post_Sig"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0_Post_Sig"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0_Post_Sig"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0_Post_Sig"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0_Post_Sig"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0_Post_Sig"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0_Post_Sig"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0_Post_Sig"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0_Post_Sig"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
+    const bool signalD0 = candidate.flagMcMatchRec() == signalDecay;
+    const bool signalD0bar = candidate.flagMcMatchRec() == -signalDecay;
+
+    // Each call contributes ONE hypothesis to the common 14 signal/background pairs.
+    const auto fillHypothesis = [&](bool isSignal, float massDifference, float absCosThetaStar,
+                                    float ptKaon, float ptPion, float dcaKaon, float dcaPion) {
+      if (isSignal) {
+        registry.fill(HIST("cutQA/m_Sig"), massDifference, pt);
+        registry.fill(HIST("cutQA/DCA_Sig"), dcaCandidate, pt);
+        registry.fill(HIST("cutQA/cosThetaStar_Sig"), absCosThetaStar, pt);
+        registry.fill(HIST("cutQA/ptK_Sig"), ptKaon, pt);
+        registry.fill(HIST("cutQA/ptPi_Sig"), ptPion, pt);
+        registry.fill(HIST("cutQA/d0K_Sig"), dcaKaon, pt);
+        registry.fill(HIST("cutQA/d0pi_Sig"), dcaPion, pt);
+        registry.fill(HIST("cutQA/d0d0_Sig"), impactParameterProduct, pt);
+        registry.fill(HIST("cutQA/cpa_Sig"), cpa, pt);
+        registry.fill(HIST("cutQA/cpaXY_Sig"), cpaXY, pt);
+        registry.fill(HIST("cutQA/normDecLenXY_Sig"), normDecLenXY, pt);
+        registry.fill(HIST("cutQA/decLen_Sig"), decLen, pt);
+        registry.fill(HIST("cutQA/decLenXY_Sig"), decLenXY, pt);
+        registry.fill(HIST("cutQA/normDauIPXYMin_Sig"), minNormDauIP, pt);
       } else {
-        registry.fill(HIST("cutQA/m_D0_Post_Bkg"), std::abs(massD0 - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0_Post_Bkg"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0_Post_Bkg"), std::abs(HfHelper::cosThetaStarD0(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0_Post_Bkg"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0_Post_Bkg"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0_Post_Bkg"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0_Post_Bkg"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0_Post_Bkg"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0_Post_Bkg"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0_Post_Bkg"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0_Post_Bkg"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0_Post_Bkg"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0_Post_Bkg"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0_Post_Bkg"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
+        registry.fill(HIST("cutQA/m_Bkg"), massDifference, pt);
+        registry.fill(HIST("cutQA/DCA_Bkg"), dcaCandidate, pt);
+        registry.fill(HIST("cutQA/cosThetaStar_Bkg"), absCosThetaStar, pt);
+        registry.fill(HIST("cutQA/ptK_Bkg"), ptKaon, pt);
+        registry.fill(HIST("cutQA/ptPi_Bkg"), ptPion, pt);
+        registry.fill(HIST("cutQA/d0K_Bkg"), dcaKaon, pt);
+        registry.fill(HIST("cutQA/d0pi_Bkg"), dcaPion, pt);
+        registry.fill(HIST("cutQA/d0d0_Bkg"), impactParameterProduct, pt);
+        registry.fill(HIST("cutQA/cpa_Bkg"), cpa, pt);
+        registry.fill(HIST("cutQA/cpaXY_Bkg"), cpaXY, pt);
+        registry.fill(HIST("cutQA/normDecLenXY_Bkg"), normDecLenXY, pt);
+        registry.fill(HIST("cutQA/decLen_Bkg"), decLen, pt);
+        registry.fill(HIST("cutQA/decLenXY_Bkg"), decLenXY, pt);
+        registry.fill(HIST("cutQA/normDauIPXYMin_Bkg"), minNormDauIP, pt);
       }
-    }
-    if (isSignalD0bar) {
-        registry.fill(HIST("cutQA/m_D0bar_Pre_Sig"), std::abs(massD0bar - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0bar_Pre_Sig"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0bar_Pre_Sig"), std::abs(HfHelper::cosThetaStarD0bar(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0bar_Pre_Sig"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0bar_Pre_Sig"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0bar_Pre_Sig"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0bar_Pre_Sig"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0bar_Pre_Sig"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0bar_Pre_Sig"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0bar_Pre_Sig"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0bar_Pre_Sig"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0bar_Pre_Sig"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0bar_Pre_Sig"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0bar_Pre_Sig"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
-    } else {
-        registry.fill(HIST("cutQA/m_D0bar_Pre_Bkg"), std::abs(massD0bar - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0bar_Pre_Bkg"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0bar_Pre_Bkg"), std::abs(HfHelper::cosThetaStarD0bar(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0bar_Pre_Bkg"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0bar_Pre_Bkg"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0bar_Pre_Bkg"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0bar_Pre_Bkg"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0bar_Pre_Bkg"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0bar_Pre_Bkg"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0bar_Pre_Bkg"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0bar_Pre_Bkg"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0bar_Pre_Bkg"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0bar_Pre_Bkg"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0bar_Pre_Bkg"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
-    }
-    if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-      if (isSignalD0bar) {
-        registry.fill(HIST("cutQA/m_D0bar_Post_Sig"), std::abs(massD0bar - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0bar_Post_Sig"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0bar_Post_Sig"), std::abs(HfHelper::cosThetaStarD0bar(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0bar_Post_Sig"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0bar_Post_Sig"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0bar_Post_Sig"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0bar_Post_Sig"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0bar_Post_Sig"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0bar_Post_Sig"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0bar_Post_Sig"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0bar_Post_Sig"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0bar_Post_Sig"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0bar_Post_Sig"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0bar_Post_Sig"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
-      } else {
-        registry.fill(HIST("cutQA/m_D0bar_Post_Bkg"), std::abs(massD0bar - o2::constants::physics::MassD0), ptCutQA);
-        registry.fill(HIST("cutQA/DCA_D0bar_Post_Bkg"), std::abs(candidate.impactParameterXY()), ptCutQA);
-        registry.fill(HIST("cutQA/cosThetaStar_D0bar_Post_Bkg"), std::abs(HfHelper::cosThetaStarD0bar(candidate)), ptCutQA);
-        registry.fill(HIST("cutQA/ptK_D0bar_Post_Bkg"), trackPos.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/ptPi_D0bar_Post_Bkg"), trackNeg.pt(), ptCutQA);
-        registry.fill(HIST("cutQA/d0K_D0bar_Post_Bkg"), std::abs(trackPos.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0pi_D0bar_Post_Bkg"), std::abs(trackNeg.dcaXY()), ptCutQA);
-        registry.fill(HIST("cutQA/d0d0_D0bar_Post_Bkg"), candidate.impactParameterProduct(), ptCutQA);
-        registry.fill(HIST("cutQA/cpa_D0bar_Post_Bkg"), candidate.cpa(), ptCutQA);
-        registry.fill(HIST("cutQA/cpaXY_D0bar_Post_Bkg"), candidate.cpaXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDecLenXY_D0bar_Post_Bkg"), candidate.decayLengthXYNormalised(), ptCutQA);
-        registry.fill(HIST("cutQA/decLen_D0bar_Post_Bkg"), candidate.decayLength(), ptCutQA);
-        registry.fill(HIST("cutQA/decLenXY_D0bar_Post_Bkg"), candidate.decayLengthXY(), ptCutQA);
-        registry.fill(HIST("cutQA/normDauIPXYMin_D0bar_Post_Bkg"), std::min(std::abs(candidate.impactParameterNormalised0()), std::abs(candidate.impactParameterNormalised1())), ptCutQA);
-      }
-    }
+    };
+
+    fillHypothesis(signalD0,
+                   std::abs(massD0 - o2::constants::physics::MassD0),
+                   std::abs(HfHelper::cosThetaStarD0(candidate)),
+                   trackNeg.pt(), trackPos.pt(),
+                   std::abs(trackNeg.dcaXY()), std::abs(trackPos.dcaXY()));
+    fillHypothesis(signalD0bar,
+                   std::abs(massD0bar - o2::constants::physics::MassD0),
+                   std::abs(HfHelper::cosThetaStarD0bar(candidate)),
+                   trackPos.pt(), trackNeg.pt(),
+                   std::abs(trackPos.dcaXY()), std::abs(trackNeg.dcaXY()));
   }
-  // END ADDITIVE SELECTOR CUT QA
+  // END SELECTOR-OBSERVABLE QA
 
   template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
   void processMc(CandType const& candidates,
                  soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                  TracksSelQuality const&,
-                 TracksDcaCutQA const&,
                  CollType const& collisions,
                  McCollisionsWithCentrality const&,
                  BCsType const&)
@@ -1295,9 +1143,7 @@ struct HfTaskD0 {
       }
       auto trackPos = candidate.template prong0_as<TracksSelQuality>(); // positive daughter
       auto trackNeg = candidate.template prong1_as<TracksSelQuality>(); // negative daughter
-      auto cutQaPos = candidate.template prong0_as<TracksDcaCutQA>();
-      auto cutQaNeg = candidate.template prong1_as<TracksDcaCutQA>();
-      fillMcSelectorCutQA(candidate, cutQaPos, cutQaNeg, massD0, massD0bar);
+      fillMcSelectorCutQA(candidate, trackPos, trackNeg, massD0, massD0bar);
       if (std::abs(candidate.flagMcMatchRec()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
         // Get the corresponding MC particle.
         auto indexMother = RecoDecay::getMother(mcParticles, trackPos.template mcParticle_as<soa::Join<aod::McParticles, aod::HfCand2ProngMcGen>>(), o2::constants::physics::Pdg::kD0, true);
@@ -1658,36 +1504,33 @@ struct HfTaskD0 {
   void processMcWithDCAFitterN(D0CandidatesMc const&,
                                soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                                TracksSelQuality const& tracks,
-                               TracksDcaCutQA const& cutQaTracks,
                                CollisionsWithMcLabels const& collisions,
                                McCollisionsWithCentrality const& mcCollisions,
                                aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, mcParticles, tracks, cutQaTracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
   PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterN, "Process MC with DCAFitterN", false);
 
   void processMcWithDCAFitterNCent(D0CandidatesMc const&,
                                    soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                                    TracksSelQuality const& tracks,
-                               TracksDcaCutQA const& cutQaTracks,
                                    CollisionsWithMcLabelsCent const& collisions,
                                    McCollisionsWithCentrality const& mcCollisions,
                                    aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, mcParticles, tracks, cutQaTracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
   PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNCent, "Process MC with DCAFitterN and centrality", false);
 
   void processMcWithKFParticle(D0CandidatesMcKF const&,
                                soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                                TracksSelQuality const& tracks,
-                               TracksDcaCutQA const& cutQaTracks,
                                CollisionsWithMcLabels const& collisions,
                                McCollisionsWithCentrality const& mcCollisions,
                                aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::KfParticle, false>(selectedD0CandidatesMcKF, mcParticles, tracks, cutQaTracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::KfParticle, false>(selectedD0CandidatesMcKF, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
   PROCESS_SWITCH(HfTaskD0, processMcWithKFParticle, "Process MC with KFParticle", false);
   // TODO: add the processMcWithKFParticleCent
@@ -1695,36 +1538,33 @@ struct HfTaskD0 {
   void processMcWithDCAFitterNMl(D0CandidatesMlMc const&,
                                  soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                                  TracksSelQuality const& tracks,
-                               TracksDcaCutQA const& cutQaTracks,
                                  CollisionsWithMcLabels const& collisions,
                                  McCollisionsWithCentrality const& mcCollisions,
                                  aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, mcParticles, tracks, cutQaTracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
   PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNMl, "Process MC with DCAFitterN and ML selection", false);
 
   void processMcWithDCAFitterNMlCent(D0CandidatesMlMc const&,
                                      soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                                      TracksSelQuality const& tracks,
-                               TracksDcaCutQA const& cutQaTracks,
                                      CollisionsWithMcLabelsCent const& collisions,
                                      McCollisionsWithCentrality const& mcCollisions,
                                      aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, mcParticles, tracks, cutQaTracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
   PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNMlCent, "Process MC with DCAFitterN and ML selection and centrality", false);
 
   void processMcWithKFParticleMl(D0CandidatesMlMcKF const&,
                                  soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                                  TracksSelQuality const& tracks,
-                               TracksDcaCutQA const& cutQaTracks,
                                  CollisionsWithMcLabels const& collisions,
                                  McCollisionsWithCentrality const& mcCollisions,
                                  aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::KfParticle, true>(selectedD0CandidatesMlMcKF, mcParticles, tracks, cutQaTracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::KfParticle, true>(selectedD0CandidatesMlMcKF, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
   PROCESS_SWITCH(HfTaskD0, processMcWithKFParticleMl, "Process MC with KFParticle and ML selections", false);
   // TODO: add the processMcWithKFParticleMlCent
