@@ -9,7 +9,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//THIS IS A NEW FILE MADE BY SILAS DITTERS
+//THIS IS AN EDITED VERSION MADE BY SILAS DITTERS
 
 /// \file taskD0.cxx
 /// \brief D0 analysis task
