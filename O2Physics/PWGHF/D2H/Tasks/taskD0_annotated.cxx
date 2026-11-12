@@ -1412,21 +1412,26 @@ struct HfTaskD0 {
             occ = o2::hf_occupancy::getOccupancyGenColl(recoCollsPerMcCollCent, occEstimator);
           }
         } 
-        //If there are no centrality columns: same as in if statement, but without cent, occ, IR.
+        //If there are no centrality columns: same as above, but without cent, occ, IR.
         else {
+          //Group generated collision by collision ID
           const auto& recoCollsPerMcColl = collisions.sliceBy(colPerMcCollision, particle.mcCollisionId());
+          //Loop through reconstructed collisions
           for (const auto& recCol : recoCollsPerMcColl) {
             maxNumContrib = recCol.numContrib() > maxNumContrib ? recCol.numContrib() : maxNumContrib;
           }
         }
 
         if (fillEventStatus) {
+          //Get collision of current MC particle, with gen. level centrality quantities
           const auto mcCollision = particle.template mcCollision_as<McCollisionsWithCentrality>();
           const auto eventEntry = recoEventStatus.find(mcCollision.globalIndex());
+          //eventstatus takes actual even status from reco event, or NoRecoCollision if there is none
           eventStatus = eventEntry == recoEventStatus.end() ? NoRecoCollision : eventEntry->second;
           // Replace the existing centrality coordinate, including zero-reco events.
           cent = centEstimator == CentralityEstimator::FT0C ? mcCollision.centFT0C() : mcCollision.centFT0M();
         }
+        //Lambda function: fills Sparse THN based on if fillEventStatus is true or false
         const auto fillGeneratedSparse = [&](auto... coordinates) {
           if (fillEventStatus) {
             registry.fill(HIST("hSparseAcc"), coordinates..., eventStatus);
@@ -1435,10 +1440,12 @@ struct HfTaskD0 {
           }
         };
 
+        //Enters if statement if generated particle is prompt
         if (particle.originMcGen() == RecoDecay::OriginType::Prompt) {
           registry.fill(HIST("hPtGenPrompt"), ptGen);
           registry.fill(HIST("hYGenPrompt"), yGen);
           registry.fill(HIST("hPtVsYGenPrompt"), ptGen, yGen);
+          //If cent, Occ, IR is stored, fill sparse histogram
           if (storeCentrality && storeOccupancyAndIR) {
             fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib, cent, occ);
           } else if (storeCentrality && !storeOccupancyAndIR) {
@@ -1448,7 +1455,10 @@ struct HfTaskD0 {
           } else {
             fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib);
           }
-        } else {
+        } 
+        //Do the same if generated particle is non-prompt
+        else {
+          //Save also pT of non-prompts beauty mother
           ptGenB = mcParticles.rawIteratorAt(particle.idxBhadMotherPart()).pt();
           registry.fill(HIST("hPtGenNonPrompt"), ptGen);
           registry.fill(HIST("hYGenNonPrompt"), yGen);
@@ -1463,6 +1473,7 @@ struct HfTaskD0 {
             fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib);
           }
         }
+        //Fill Eta histogram for generated level D0
         registry.fill(HIST("hEtaGen"), particle.eta());
       }
     }
