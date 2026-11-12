@@ -514,21 +514,27 @@ struct HfTaskD0 {
     ccdb->setLocalObjectValidityChecking();
   }
 
+  //Template function: Allows processData to work with different configurations
   template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
   void processData(CandType const& candidates,
                    CollType const&,
                    aod::TracksWExtra const&,
                    BCsType const&)
   {
+    //Loop over candidates, candidate is predefined join of tables
     for (const auto& candidate : candidates) {
+      //Bitmask check: if candidate not flagged as D->K pi, skip it
       if (!(candidate.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
         continue;
       }
+      //Rapidity cut: is max rap > 0? and is rap between allowed values? if not, skip 
       if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
         continue;
       }
 
+      //initialize D0 and anti-D0 masses
       float massD0{0.f}, massD0bar{0.f};
+      //Which mass we use, checks at compile time? If we use KfP, use their mass. Else: use mass from candidate using HfHelper
       if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
         massD0 = candidate.kfGeoMassD0();
         massD0bar = candidate.kfGeoMassD0bar();
@@ -536,18 +542,24 @@ struct HfTaskD0 {
         massD0 = HfHelper::invMassD0ToPiK(candidate);
         massD0bar = HfHelper::invMassD0barToKPi(candidate);
       }
+      //retrieve D0 candidate p_T
       auto ptCandidate = candidate.pt();
 
+      //Fills histograms based on hypothesis, candidate can pass both!
+      //If passes D0 hypothesis, fill histograms
       if (candidate.isSelD0() >= selectionFlagD0) {
         registry.fill(HIST("hMass"), massD0, ptCandidate);
         registry.fill(HIST("hMassFinerBinning"), massD0, ptCandidate);
         registry.fill(HIST("hMassVsPhi"), massD0, ptCandidate, candidate.phi());
       }
+      //If passes D0bar hypothesis, fill histograms
       if (candidate.isSelD0bar() >= selectionFlagD0bar) {
         registry.fill(HIST("hMass"), massD0bar, ptCandidate);
         registry.fill(HIST("hMassFinerBinning"), massD0bar, ptCandidate);
         registry.fill(HIST("hMassVsPhi"), massD0bar, ptCandidate, candidate.phi());
       }
+      //Fills a bunch of histograms for candidates that pass previous checks/cuts
+      //NOTE: does not check D0/D0bar hypothesis, histogram is filled once for each candidate
       registry.fill(HIST("hPtCand"), ptCandidate);
       registry.fill(HIST("hPtProng0"), candidate.ptProng0());
       registry.fill(HIST("hPtProng1"), candidate.ptProng1());
@@ -577,18 +589,24 @@ struct HfTaskD0 {
       registry.fill(HIST("hCPAFinerBinning"), candidate.cpa(), ptCandidate);
       registry.fill(HIST("hCPAXYFinerBinning"), candidate.cpaXY(), ptCandidate);
 
+      //Initialize centrality and occupancy values, default = -1 : means we dont use by default
       float cent{-1.f};
       float occ{-1.f};
       float ir{-1.f};
       int numPvContributors = -1;
+      //Only store this info, if either storer is active
       if (storeCentrality || storeOccupancyAndIR) {
+        //Gets the collision the candidate came from
         auto collision = candidate.template collision_as<CollType>();
+        //if cent storage and proper estimater are active: get that info
         if (storeCentrality && centEstimator != CentralityEstimator::None) {
           cent = getCentralityColl(collision, centEstimator);
           numPvContributors = collision.numContrib();
         }
+        //if OC & IR storage and estimator are active: get that info
         if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
           occ = o2::hf_occupancy::getOccupancyColl(collision, occEstimator);
+          //gets the specific bunch crossing a collision came from
           auto bc = collision.template foundBC_as<BCsType>();
           ir = mRateFetcher.fetch(ccdb.service, bc.timestamp(), bc.runNumber(), irSource, true) * 1.e-3; // kHz
         }
@@ -596,8 +614,11 @@ struct HfTaskD0 {
 
       auto trackPos = candidate.template prong0_as<o2::aod::TracksWExtra>(); // positive daughter
       auto trackNeg = candidate.template prong1_as<o2::aod::TracksWExtra>(); // negative daughter
+      //Whichever prong has less ITS clusters, take that value
       int const minItsClustersOfProngs = std::min(trackPos.itsNCls(), trackNeg.itsNCls());
+      //Whichever prong has less TPC crossed rows, take that value
       int const minTpcCrossedRowsOfProngs = std::min(trackPos.tpcNClsCrossedRows(), trackNeg.tpcNClsCrossedRows());
+      //Fills histograms with ML info for different hypotheses and possible extra storage of Cent, IR, Occ, etc.
       if constexpr (ApplyMl) {
         if (storeCentrality && storeOccupancyAndIR) {
           if (candidate.isSelD0() >= selectionFlagD0) {
