@@ -1392,21 +1392,28 @@ struct HfTaskD0 {
         //Initialized maximum number of contributions, cannot be negative
         unsigned maxNumContrib = 0;
 
-        //Initialize centrality and occupancy, default = -1, if not used
+        //Initialize centrality and occupancy, default = -1, for if not used
         float cent{-1.f};
         float occ{-1.f};
+        //If collision table includes reconstructed centrality info, enter if statement
         if constexpr (std::is_same_v<CollType, CollisionsWithMcLabelsCent>) {
+          //Group generated collision by collision ID
           const auto& recoCollsPerMcCollCent = collisions.sliceBy(colPerMcCollisionCent, particle.mcCollisionId());
+          //Loop through reconstructed collision
           for (const auto& recCol : recoCollsPerMcCollCent) {
+            //Whichever is bigger, take as maxNumContrib
             maxNumContrib = recCol.numContrib() > maxNumContrib ? recCol.numContrib() : maxNumContrib;
           }
+          //If Centrality, Occupancy, IR storage and estimators are active, get info
           if (storeCentrality && centEstimator != CentralityEstimator::None) {
             cent = getCentralityGenColl(recoCollsPerMcCollCent, centEstimator);
           }
           if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
             occ = o2::hf_occupancy::getOccupancyGenColl(recoCollsPerMcCollCent, occEstimator);
           }
-        } else {
+        } 
+        //If there are no centrality columns: same as in if statement, but without cent, occ, IR.
+        else {
           const auto& recoCollsPerMcColl = collisions.sliceBy(colPerMcCollision, particle.mcCollisionId());
           for (const auto& recCol : recoCollsPerMcColl) {
             maxNumContrib = recCol.numContrib() > maxNumContrib ? recCol.numContrib() : maxNumContrib;
