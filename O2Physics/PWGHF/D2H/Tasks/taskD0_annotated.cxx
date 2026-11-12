@@ -1374,20 +1374,25 @@ struct HfTaskD0 {
     // Loop over true (MC truth info) particles
     for (const auto& particle : mcParticles) {
       //Check if generated particle matches D0->piK decay
-      //Rapidity cut, but stricter because between +- 0.t
       if (std::abs(particle.flagMcMatchGen()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
+        //Rapidity cut
         if (yCandGenMax >= 0. && std::abs(RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0)) > yCandGenMax) {
           continue;
         }
-        float ptGenB = -1;
-        auto ptGen = particle.pt();
-        auto yGen = RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0);
+        
+        float ptGenB = -1; //Beauty mother pT initialized, default = -1, because prompt have no beauty mother
+        auto ptGen = particle.pt(); //Gen. level pT
+        auto yGen = RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0); //gen. level rapidity
         registry.fill(HIST("hPtGen"), ptGen);
         registry.fill(HIST("hPtVsYGen"), ptGen, yGen);
 
+        //Initializes NoRecoCollision = 0
         int eventStatus = NoRecoCollision;
 
+        //Initialized maximum number of contributions, cannot be negative
         unsigned maxNumContrib = 0;
+
+        //Initialize centrality and occupancy, default = -1, if not used
         float cent{-1.f};
         float occ{-1.f};
         if constexpr (std::is_same_v<CollType, CollisionsWithMcLabelsCent>) {
