@@ -1009,6 +1009,7 @@ struct HfTaskD0 {
   PROCESS_SWITCH(HfTaskD0, processDataWithKFParticleMl, "process taskD0 with KFParticle and ML selections", false);
   // TODO: add processKFParticleMlCent
 
+  //Template function to allow this processMc to work with different configurations
   template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
   void processMc(CandType const& candidates,
                  soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
@@ -1018,37 +1019,49 @@ struct HfTaskD0 {
                  BCsType const&)
   {
     // MC rec.
+    //Loop over reconstructed candidates
     for (const auto& candidate : candidates) {
+      //Check if candidate passes HF flag, if not: skip
       if (!(candidate.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
         continue;
       }
+      //Check if candidate is within correctly set rapidity values, if not: skip
       if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
         continue;
       }
 
+      //Initialize centrality, occupancy, IR, etc. info, default = -1 : dont use
       float cent{-1.f};
       float occ{-1.f};
       float ir{-1.f};
+      //get collision that candidate came from
       auto collision = candidate.template collision_as<CollType>();
       auto numPvContributors = collision.numContrib();
+      //If centrality storage and estimator are active, get info
       if (storeCentrality && centEstimator != CentralityEstimator::None) {
         cent = getCentralityColl(collision, centEstimator);
       }
+      //If Occupancy and IR storage and estimator are active, get info
       if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
         occ = o2::hf_occupancy::getOccupancyColl(collision, occEstimator);
+        //get Bunch-Crossing where collision came from
         auto bc = collision.template foundBC_as<BCsType>();
         ir = mRateFetcher.fetch(ccdb.service, bc.timestamp(), bc.runNumber(), irSource, true) * 1.e-3; // kHz
       }
+      //Initialize D0/D0bar mass
       float massD0{0.f}, massD0bar{0.f};
+      //If using KfParticle RecoType, get mass from that 
       if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
         massD0 = candidate.kfGeoMassD0();
         massD0bar = candidate.kfGeoMassD0bar();
+      //If using DCAFitterN, get mass from candidate using HfHelper
       } else {
         massD0 = HfHelper::invMassD0ToPiK(candidate);
         massD0bar = HfHelper::invMassD0barToKPi(candidate);
       }
       auto trackPos = candidate.template prong0_as<TracksSelQuality>(); // positive daughter
       auto trackNeg = candidate.template prong1_as<TracksSelQuality>(); // negative daughter
+      //Check if reconstructed candidate is actual D0->piK using MC truth info
       if (std::abs(candidate.flagMcMatchRec()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
         // Get the corresponding MC particle.
         auto indexMother = RecoDecay::getMother(mcParticles, trackPos.template mcParticle_as<soa::Join<aod::McParticles, aod::HfCand2ProngMcGen>>(), o2::constants::physics::Pdg::kD0, true);
@@ -1058,47 +1071,62 @@ struct HfTaskD0 {
         registry.fill(HIST("hPtGenSig"), ptGen);                                            // gen. level pT
         auto ptRec = candidate.pt();
         auto yRec = HfHelper::yD0(candidate);
+        //Checks if reconstructed particle satisfied HF flag
         if (candidate.isRecoHfFlag() >= selectionFlagHf) {
+          //Fills generated vs reconstructed obsverables histograms
           registry.fill(HIST("hPtVsYRecSigRecoHFFlag"), ptRec, yRec);
           registry.fill(HIST("hPtGenVsPtRecSig"), ptGen, ptRec);
           registry.fill(HIST("hYGenVsYRecSig"), yGen, yRec);
           if (candidate.isSelD0() >= selectionFlagD0) {
+            //If candidate satisfies D0 hypothesis, fill 3d histogram
             registry.fill(HIST("hMassVsPtGenVsPtRecSig"), massD0, ptGen, ptRec);
           }
+          //If candidate satisfies D0bar hypothesis, fill 3d histogram
           if (candidate.isSelD0bar() >= selectionFlagD0bar) {
             registry.fill(HIST("hMassVsPtGenVsPtRecSig"), massD0bar, ptGen, ptRec);
           }
         }
+        //If candidate passes Topolofical Selection, fill histogram
         if (candidate.isRecoTopol() >= selectionTopol) {
           registry.fill(HIST("hPtVsYRecSigRecoTopol"), ptRec, yRec);
         }
+        //If candidate passes Candidate/hypothesis selection, fill histogram
         if (candidate.isRecoCand() >= selectionCand) {
           registry.fill(HIST("hPtVsYRecSigRecoCand"), ptRec, yRec);
         }
+        //If candidate passes Particle-ID selection, fill histogram 
         if (candidate.isRecoPid() >= selectionPid) {
           registry.fill(HIST("hPtVsYRecSig_RecoPID"), ptRec, yRec);
         }
+        //If particle passes D0 or D0bar hyptohesis, fill histograms
         if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
           registry.fill(HIST("hPtVsYRecSigReco"), ptRec, yRec); // rec. level pT
-          registry.fill(HIST("hPtRecSig"), ptRec);
+          registry.fill(HIST("hPtRecSig"), ptRec // rec. level pT spectrum
         }
+        //Check if candidate is prompt
         if (candidate.originMcRec() == RecoDecay::OriginType::Prompt) {
+          //If candidate passes HF reconstruction selection, fill histogram
           if (candidate.isRecoHfFlag() >= selectionFlagHf) {
             registry.fill(HIST("hPtVsYRecSigPromptRecoHFFlag"), ptRec, yRec);
           }
+          //If candidate passes Topolofical Selection, fill histogram
           if (candidate.isRecoTopol() >= selectionTopol) {
             registry.fill(HIST("hPtVsYRecSigPromptRecoTopol"), ptRec, yRec);
           }
+          //If candidate passes Candidate/hypothesis selection, fill histogram
           if (candidate.isRecoCand() >= selectionCand) {
             registry.fill(HIST("hPtVsYRecSigPromptRecoCand"), ptRec, yRec);
           }
+          //If candidate passes Particle-ID selection, fill histogram 
           if (candidate.isRecoPid() >= selectionPid) {
             registry.fill(HIST("hPtVsYRecSigPromptRecoPID"), ptRec, yRec);
           }
+          //If particle satisfies D0 or D0bar hypothesis, fill histograms
           if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
             registry.fill(HIST("hPtVsYRecSigPromptReco"), ptRec, yRec); // rec. level pT, prompt
-            registry.fill(HIST("hPtRecSigPrompt"), ptRec);
+            registry.fill(HIST("hPtRecSigPrompt"), ptRec); //rec. level prompt pT spectrum
           }
+        //Same as everything in preceding if-statement, but for non-prompt
         } else {
           if (candidate.isRecoHfFlag() >= selectionFlagHf) {
             registry.fill(HIST("hPtVsYRecSigNonPromptRecoHFFlag"), ptRec, yRec);
@@ -1117,32 +1145,43 @@ struct HfTaskD0 {
             registry.fill(HIST("hPtRecSigNonPrompt"), ptRec);
           }
         }
+        //Fill reconstructed CPA and Eta signal
         registry.fill(HIST("hCPARecSig"), candidate.cpa());
         registry.fill(HIST("hEtaRecSig"), candidate.eta());
-      } else {
+      } 
+      //If not checked a true D0->piK, fill as background
+      else { 
         registry.fill(HIST("hPtRecBg"), candidate.pt());
         registry.fill(HIST("hCPARecBg"), candidate.cpa());
         registry.fill(HIST("hEtaRecBg"), candidate.eta());
       }
-      auto ptCandidate = candidate.pt();
-      auto ptProng0 = candidate.ptProng0();
-      auto ptProng1 = candidate.ptProng1();
-      auto rapidityCandidate = HfHelper::yD0(candidate);
-      auto declengthCandidate = candidate.decayLength();
-      auto declengthxyCandidate = candidate.decayLengthXY();
-      auto normaliseddeclengthCandidate = candidate.decayLengthNormalised();
-      auto normaliseddeclengthxyCandidate = candidate.decayLengthXYNormalised();
-      auto d0Prong0 = candidate.impactParameter0();
-      auto d0Prong1 = candidate.impactParameter1();
-      auto d0d0Candidate = candidate.impactParameterProduct();
-      auto ctsCandidate = HfHelper::cosThetaStarD0(candidate);
-      auto ctCandidate = HfHelper::ctD0(candidate);
-      auto cpaCandidate = candidate.cpa();
-      auto cpaxyCandidate = candidate.cpaXY();
-      int const minItsClustersOfProngs = std::min(trackPos.itsNCls(), trackNeg.itsNCls());
+      //Initialize observables to fill into histograms
+      auto ptCandidate = candidate.pt(); //rec. candidate pT
+      auto ptProng0 = candidate.ptProng0(); //rec. candidate pT prong0
+      auto ptProng1 = candidate.ptProng1(); //rec. candidate pT prong1
+      auto rapidityCandidate = HfHelper::yD0(candidate); // rec. candidate rapidity
+      auto declengthCandidate = candidate.decayLength(); // rec. candidate decay length
+      auto declengthxyCandidate = candidate.decayLengthXY(); // rec. candidate transverse decay length
+      auto normaliseddeclengthCandidate = candidate.decayLengthNormalised(); // rec. candidate normalized decay length
+      auto normaliseddeclengthxyCandidate = candidate.decayLengthXYNormalised(); // rec. candidate normalized transverse decay length
+      auto d0Prong0 = candidate.impactParameter0(); // rec. impact parameter prong0
+      auto d0Prong1 = candidate.impactParameter1(); // rec. impact parameter prong1
+      auto d0d0Candidate = candidate.impactParameterProduct(); // rec. product of impact parameters
+      auto ctsCandidate = HfHelper::cosThetaStarD0(candidate); // rec. candidate Cos theta*
+      auto ctCandidate = HfHelper::ctD0(candidate); // rec. candidate lifetime * c
+      auto cpaCandidate = candidate.cpa(); // rec. candidate Cos of pointing angle
+      auto cpaxyCandidate = candidate.cpaXY(); // rec. candidate Cos of pointing angle in transverse plane
+      
+      //Whichever prong has less clusters in ITS, take that value
+      int const minItsClustersOfProngs = std::min(trackPos.itsNCls(), trackNeg.itsNCls()); 
+      //Whichever prong hass less crossed rows in TPC, take that value
       int const minTpcCrossedRowsOfProngs = std::min(trackPos.tpcNClsCrossedRows(), trackNeg.tpcNClsCrossedRows());
+
+      //If candidate pass D0 hypothesis, fill histograms
       if (candidate.isSelD0() >= selectionFlagD0) {
+        //Combines signal and background
         registry.fill(HIST("hMassSigBkgD0"), massD0, ptCandidate, rapidityCandidate);
+        //Truth match, if candidate really is D0->piK, fill histograms
         if (candidate.flagMcMatchRec() == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
           registry.fill(HIST("hPtProng0Sig"), ptProng0, rapidityCandidate);
           registry.fill(HIST("hPtProng1Sig"), ptProng1, rapidityCandidate);
@@ -1167,6 +1206,8 @@ struct HfTaskD0 {
           registry.fill(HIST("hDecLengthVsPtSig"), declengthCandidate, ptCandidate);
           registry.fill(HIST("hDecLengthxyVsPtSig"), declengthxyCandidate, ptCandidate);
           registry.fill(HIST("hMassSigD0"), massD0, ptCandidate, rapidityCandidate);
+          
+          //Fill histograms if ML is active
           if constexpr (ApplyMl) {
             if (storeCentrality && storeOccupancyAndIR) {
               registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
@@ -1192,7 +1233,9 @@ struct HfTaskD0 {
               registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
             }
           }
-        } else {
+        } 
+        //If not truth matched as real D0->piK, fill background histograms
+        else {
           registry.fill(HIST("hPtProng0Bkg"), ptProng0, rapidityCandidate);
           registry.fill(HIST("hPtProng1Bkg"), ptProng1, rapidityCandidate);
           registry.fill(HIST("hDecLengthBkg"), declengthCandidate, rapidityCandidate);
@@ -1207,6 +1250,7 @@ struct HfTaskD0 {
           registry.fill(HIST("hCPABkg"), cpaCandidate, rapidityCandidate);
           registry.fill(HIST("hCPAxyBkg"), cpaxyCandidate, rapidityCandidate);
           registry.fill(HIST("hMassBkgD0"), massD0, ptCandidate, rapidityCandidate);
+          //Checks if candidate is truth matched to D0bar, if so = reflection background
           if (candidate.flagMcMatchRec() == -o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
             registry.fill(HIST("hMassReflBkgD0"), massD0, ptCandidate, rapidityCandidate);
             if constexpr (ApplyMl) {
@@ -1237,6 +1281,7 @@ struct HfTaskD0 {
           }
         }
       }
+      //Fill histograms for D0bar hypothesis candidates
       if (candidate.isSelD0bar() >= selectionFlagD0bar) {
         registry.fill(HIST("hMassSigBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
         if (candidate.flagMcMatchRec() == -o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
@@ -1266,7 +1311,9 @@ struct HfTaskD0 {
               registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec());
             }
           }
-        } else {
+        } 
+        //Fills background for D0bar
+        else {
           registry.fill(HIST("hMassBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
           if (candidate.flagMcMatchRec() == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
             registry.fill(HIST("hMassReflBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
@@ -1324,7 +1371,10 @@ struct HfTaskD0 {
 
     // MC gen. Each particle is filled once, even for split or unreconstructed events.
     // Upstream event rejection can clear flagMcMatchGen: this is not an unfiltered truth sample.
+    // Loop over true (MC truth info) particles
     for (const auto& particle : mcParticles) {
+      //Check if generated particle matches D0->piK decay
+      //Rapidity cut, but stricter because between +- 0.t
       if (std::abs(particle.flagMcMatchGen()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
         if (yCandGenMax >= 0. && std::abs(RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0)) > yCandGenMax) {
           continue;
