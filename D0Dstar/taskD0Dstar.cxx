@@ -287,7 +287,7 @@ struct HfTaskD0 {
      void init(InitContext&)
   {
     std::array<bool, 14> doprocess{doprocessDataWithDCAFitterN, doprocessDataWithDCAFitterNCent, doprocessDataWithKFParticle, doprocessMcWithDCAFitterN, doprocessMcWithDCAFitterNCent, doprocessMcWithKFParticle, doprocessDataWithDCAFitterNMl, doprocessDataWithDCAFitterNMlCent, doprocessDataWithKFParticleMl, doprocessMcWithDCAFitterNMl, doprocessMcWithDCAFitterNMlCent, doprocessMcWithKFParticleMl, doprocessDataWithDCAFitterNWithUpc, doprocessDataWithDCAFitterNMlWithUpc};
-    if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0) {
+    if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0 && !doprocessDstarInputs) {
       LOGP(fatal, "At least one process function should be enabled at a time.");
     }
     if ((doprocessDataWithDCAFitterN || doprocessDataWithDCAFitterNCent || doprocessMcWithDCAFitterN || doprocessMcWithDCAFitterNCent || doprocessDataWithDCAFitterNMl || doprocessDataWithDCAFitterNMlCent || doprocessMcWithDCAFitterNMl || doprocessMcWithDCAFitterNMlCent) && (doprocessDataWithKFParticle || doprocessMcWithKFParticle || doprocessDataWithKFParticleMl || doprocessMcWithKFParticleMl)) {

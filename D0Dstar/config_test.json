@@ -9,8 +9,8 @@
     "useTrackTuner": "false"
   },
   "hf-task-d0": {
-    "processDataWithDCAFitterN": "true",
-    "processMcWithDCAFitterN": "true",
+    "processDataWithDCAFitterN": "false",
+    "processMcWithDCAFitterN": "false",
     "processDataWithDCAFitterNCent": "false",
     "processDataWithKFParticle": "false",
     "processDataWithDCAFitterNMl": "false",
@@ -22,7 +22,8 @@
     "processMcWithDCAFitterNMlCent": "false",
     "processMcWithKFParticleMl": "false",
     "processDataWithDCAFitterNWithUpc": "false",
-    "processDataWithDCAFitterNMlWithUpc": "false"
+    "processDataWithDCAFitterNMlWithUpc": "false",
+    "processDstarInputs": "true"
   },
   "tof-signal": {
     "reconstructionPass": "unanchored",
@@ -54,6 +55,21 @@
     "processMonteCarlo": "true",
     "processCentralityRun2": "false",
     "processCentralityRun3": "false"
+  },
+  "hf-track-index-skim-creator": {
+  "doDstar": "true"
+  },
+  "hf-candidate-creator-dstar": {
+    "processNoPvRefit": "true",
+    "processPvRefit": "false",
+    "processNoPvRefitCentFT0C": "false",
+    "processPvRefitCentFT0C": "false",
+    "processNoPvRefitCentFT0M": "false",
+    "processPvRefitCentFT0M": "false"
+  },
+  "hf-candidate-selector-dstar-to-d0-pi": {
+    "applyMl": "false",
+    "activateQA": "true"
   },
   "hf-candidate-selector-d0": {
     "cuts": {

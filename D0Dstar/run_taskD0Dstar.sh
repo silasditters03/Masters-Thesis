@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 INPUT_FILE="${INPUT_FILE:-@$SCRIPT_DIR/input_files.txt}"
-CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/config.json}"
+CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/config_test.json}"
 
 INPUT_PATH="$INPUT_FILE"
 input_is_list=0
@@ -44,7 +44,9 @@ stages=(
   o2-analysis-hf-track-index-skim-creator
   o2-analysis-hf-candidate-creator-2prong
   o2-analysis-hf-candidate-selector-d0
-  o2-analysis-hf-task-d0
+  o2-analysis-hf-candidate-creator-dstar
+  o2-analysis-hf-candidate-selector-dstar-to-d0-pi
+  o2-analysis-hf-task-d0-dstar
 )
 
 converter_list="${AOD_CONVERTERS:-}"
