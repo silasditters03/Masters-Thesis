@@ -130,6 +130,10 @@ struct HfTaskD0 {
   using D0CandidatesMlKF = soa::Filtered<soa::Join<aod::HfCand2Prong, aod::HfSelD0, aod::HfMlD0, aod::HfCand2ProngKF>>;
   using D0CandidatesMlMcKF = soa::Filtered<soa::Join<aod::HfCand2Prong, aod::HfSelD0, aod::HfMlD0, aod::HfCand2ProngKF, aod::HfCand2ProngMcRec>>;
 
+  // One row per reconstructed D* candidate, including its D0 daughter
+  // and the selection flags produced by the D* selector.
+  using DstarCandidates = soa::Join<aod::HfD0FromDstar,aod::HfCandDstars,aod::HfSelDstarToD0Pi>;
+  
   using Collisions = soa::Join<aod::Collisions, aod::EvSels, aod::PVMults>;
   using CollisionsCent = soa::Join<aod::Collisions, aod::EvSels, aod::PVMults, aod::CentFT0Ms, aod::CentFT0Cs>;
   using CollisionsWithMcLabels = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::PVMults>;
@@ -257,7 +261,30 @@ struct HfTaskD0 {
      {"hMassReflBkgD0bar", "2-prong candidates (matched);#it{m}_{inv} (GeV/#it{c}^{2}); #it{p}_{T}; #it{y}", {HistType::kTH3F, {{120, 1.5848, 2.1848}, {150, 0., 30.}, {20, -5., 5.}}}},
      {"hMassSigBkgD0bar", "2-prong candidates (not checked);#it{m}_{inv} (GeV/#it{c}^{2}); #it{p}_{T}; #it{y}", {HistType::kTH3F, {{120, 1.5848, 2.1848}, {150, 0., 30.}, {20, -5., 5.}}}}}};
 
-  void init(InitContext&)
+    HistogramRegistry registryDstar{
+    "registryDstar",
+    {
+      {"hPtD0FromSelectedDstar",
+       "D0 daughters of selected D* candidates;"
+       "#it{p}_{T}(D^{0}) (GeV/#it{c});entries",
+       {HistType::kTH1F, {{100, 0., 50.}}}}
+    }};
+
+  void processDstarInputs(DstarCandidates const& candidates)
+  {
+    for (const auto& candidate : candidates) {
+      if (!candidate.isSelDstarToD0Pi()) {
+        continue;
+      }
+
+      registryDstar.fill(
+        HIST("hPtD0FromSelectedDstar"), candidate.ptD0());
+    }
+  }
+  PROCESS_SWITCH(HfTaskD0, processDstarInputs,
+                 "Read selected D* candidates and their D0 daughters", false);
+  
+     void init(InitContext&)
   {
     std::array<bool, 14> doprocess{doprocessDataWithDCAFitterN, doprocessDataWithDCAFitterNCent, doprocessDataWithKFParticle, doprocessMcWithDCAFitterN, doprocessMcWithDCAFitterNCent, doprocessMcWithKFParticle, doprocessDataWithDCAFitterNMl, doprocessDataWithDCAFitterNMlCent, doprocessDataWithKFParticleMl, doprocessMcWithDCAFitterNMl, doprocessMcWithDCAFitterNMlCent, doprocessMcWithKFParticleMl, doprocessDataWithDCAFitterNWithUpc, doprocessDataWithDCAFitterNMlWithUpc};
     if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0) {
