@@ -130,9 +130,16 @@ struct HfTaskD0 {
   using D0CandidatesMlKF = soa::Filtered<soa::Join<aod::HfCand2Prong, aod::HfSelD0, aod::HfMlD0, aod::HfCand2ProngKF>>;
   using D0CandidatesMlMcKF = soa::Filtered<soa::Join<aod::HfCand2Prong, aod::HfSelD0, aod::HfMlD0, aod::HfCand2ProngKF, aod::HfCand2ProngMcRec>>;
 
-  // One row per reconstructed D* candidate, including its D0 daughter
-  // and the selection flags produced by the D* selector.
-  using DstarCandidates = soa::Join<aod::HfD0FromDstar,aod::HfCandDstars,aod::HfSelDstarToD0Pi>;
+  // Reconstructed D* candidates with their D0 daughters and selection flags.
+  using DstarCandidates = soa::Join<aod::HfD0FromDstar, aod::HfCandDstars, aod::HfSelDstarToD0Pi>;
+  // Reconstructed candidates with MC matching information.
+  using DstarCandidatesMc = soa::Join<aod::HfD0FromDstar, aod::HfCandDstars, aod::HfSelDstarToD0Pi, aod::HfCandDstarMcRec>;
+  // Reconstructed candidates with ML scores.
+  using DstarCandidatesMl = soa::Join<aod::HfD0FromDstar, aod::HfCandDstars, aod::HfSelDstarToD0Pi, aod::HfMlDstarToD0Pi>;
+  // Reconstructed candidates with ML scores and MC matching information.
+  using DstarCandidatesMlMc = soa::Join<aod::HfD0FromDstar, aod::HfCandDstars, aod::HfSelDstarToD0Pi, aod::HfMlDstarToD0Pi, aod::HfCandDstarMcRec>;
+  // Generated MC particles with D* decay matching information.
+  using DstarParticlesMc = soa::Join<aod::McParticles,aod::HfCandDstarMcGen>;
   
   using Collisions = soa::Join<aod::Collisions, aod::EvSels, aod::PVMults>;
   using CollisionsCent = soa::Join<aod::Collisions, aod::EvSels, aod::PVMults, aod::CentFT0Ms, aod::CentFT0Cs>;
