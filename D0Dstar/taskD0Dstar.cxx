@@ -272,7 +272,7 @@ struct HfTaskD0 {
   void init(InitContext&)
   {
     std::array<bool, 14> doprocess{doprocessDataWithDCAFitterN, doprocessDataWithDCAFitterNCent, doprocessDataWithKFParticle, doprocessMcWithDCAFitterN, doprocessMcWithDCAFitterNCent, doprocessMcWithKFParticle, doprocessDataWithDCAFitterNMl, doprocessDataWithDCAFitterNMlCent, doprocessDataWithKFParticleMl, doprocessMcWithDCAFitterNMl, doprocessMcWithDCAFitterNMlCent, doprocessMcWithKFParticleMl, doprocessDataWithDCAFitterNWithUpc, doprocessDataWithDCAFitterNMlWithUpc};
-    if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0 && !doprocessDstarInputs) {
+    if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0) {
       LOGP(fatal, "At least one process function should be enabled at a time.");
     }
     if ((doprocessDataWithDCAFitterN || doprocessDataWithDCAFitterNCent || doprocessMcWithDCAFitterN || doprocessMcWithDCAFitterNCent || doprocessDataWithDCAFitterNMl || doprocessDataWithDCAFitterNMlCent || doprocessMcWithDCAFitterNMl || doprocessMcWithDCAFitterNMlCent) && (doprocessDataWithKFParticle || doprocessMcWithKFParticle || doprocessDataWithKFParticleMl || doprocessMcWithKFParticleMl)) {
@@ -526,6 +526,272 @@ struct HfTaskD0 {
     ccdb->setLocalObjectValidityChecking();
   }
 
+  // Collision-level quantities computed once and shared by UPC species helpers.
+  struct UpcCollisionContext {
+    float centrality;
+    float occupancy;
+    float interactionRate;
+    int gap;
+    int numPvContributors;
+    upchelpers::FITInfo fitInfo;
+    float zdcEnergyZNA;
+    float zdcEnergyZNC;
+    float zdcTimeZNA;
+    float zdcTimeZNC;
+  };
+
+  // Extension points: these helpers intentionally do no work yet.
+  // Add D* inputs to the process switches before calling them. D0-D* pairs
+  // must come from the same collision and must not share daughter tracks.
+  template <bool ApplyMl, typename CandidateType>
+  void fillDstarHistogramsData(CandidateType const& /*candidate*/)
+  {
+    // TODO: Fill reconstructed D* histograms.
+  }
+
+  template <bool ApplyMl, typename D0Type, typename DstarType>
+  void fillTetraquarkHistogramsData(D0Type const& /*d0*/, DstarType const& /*dstar*/)
+  {
+    // TODO: Select a D0-D* pair and fill tetraquark histograms.
+  }
+
+  template <bool FillMl, typename CandidateType>
+  void fillDstarHistogramsDataWithUpc(CandidateType const& /*candidate*/,
+                                    UpcCollisionContext const& /*context*/)
+  {
+    // TODO: Fill reconstructed D* histograms for an accepted UPC collision.
+  }
+
+  template <bool FillMl, typename D0Type, typename DstarType>
+  void fillTetraquarkHistogramsDataWithUpc(D0Type const& /*d0*/, DstarType const& /*dstar*/,
+                                        UpcCollisionContext const& /*context*/)
+  {
+    // TODO: Select a D0-D* pair in an accepted UPC collision.
+  }
+
+  template <int ReconstructionType, bool ApplyMl, typename CandidateType, typename McParticlesType>
+  void fillDstarHistogramsMcRec(CandidateType const& /*candidate*/,
+                              McParticlesType const& /*mcParticles*/)
+  {
+    // TODO: Fill reconstructed D* signal/background histograms using MC matching.
+  }
+
+  template <int ReconstructionType, bool ApplyMl, typename D0Type, typename DstarType, typename McParticlesType>
+  void fillTetraquarkHistogramsMcRec(D0Type const& /*d0*/, DstarType const& /*dstar*/,
+                                   McParticlesType const& /*mcParticles*/)
+  {
+    // TODO: Select reconstructed pairs and inspect MC ancestry.
+  }
+
+  template <typename ParticleType>
+  void fillDstarHistogramsMcGen(ParticleType const& /*particle*/)
+  {
+    // TODO: Fill generated D* histograms once per generated particle.
+  }
+
+  template <typename D0Type, typename DstarType>
+  void fillTetraquarkHistogramsMcGen(D0Type const& /*d0*/, DstarType const& /*dstar*/)
+  {
+    // TODO: Fill generated tetraquark observables using MC ancestry.
+  }
+
+  // D0 candidate selection and histogram filling for reconstructed data.
+  template <int ReconstructionType, bool ApplyMl, typename CollType, typename BCsType, typename CandidateType>
+  void fillD0HistogramsData(CandidateType const& candidate)
+  {
+    //Bitmask check: if candidate not flagged as D->K pi, skip it
+    if (!(candidate.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
+      return;
+    }
+    //Rapidity cut: is max rap > 0? and is rap between allowed values? if not, skip 
+    if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
+      return;
+    }
+
+    //initialize D0 and anti-D0 masses
+    float massD0{0.f}, massD0bar{0.f};
+    //Which mass we use, checks at compile time? If we use KfP, use their mass. Else: use mass from candidate using HfHelper
+    if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
+      massD0 = candidate.kfGeoMassD0();
+      massD0bar = candidate.kfGeoMassD0bar();
+    } else {
+      massD0 = HfHelper::invMassD0ToPiK(candidate);
+      massD0bar = HfHelper::invMassD0barToKPi(candidate);
+    }
+    //retrieve D0 candidate p_T
+    auto ptCandidate = candidate.pt();
+
+    //Fills histograms based on hypothesis, candidate can pass both!
+    //If passes D0 hypothesis, fill histograms
+    if (candidate.isSelD0() >= selectionFlagD0) {
+      registry.fill(HIST("hMass"), massD0, ptCandidate);
+      registry.fill(HIST("hMassFinerBinning"), massD0, ptCandidate);
+      registry.fill(HIST("hMassVsPhi"), massD0, ptCandidate, candidate.phi());
+    }
+    //If passes D0bar hypothesis, fill histograms
+    if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+      registry.fill(HIST("hMass"), massD0bar, ptCandidate);
+      registry.fill(HIST("hMassFinerBinning"), massD0bar, ptCandidate);
+      registry.fill(HIST("hMassVsPhi"), massD0bar, ptCandidate, candidate.phi());
+    }
+    //Fills a bunch of histograms for candidates that pass previous checks/cuts
+    //NOTE: does not check D0/D0bar hypothesis, histogram is filled once for each candidate
+    registry.fill(HIST("hPtCand"), ptCandidate);
+    registry.fill(HIST("hPtProng0"), candidate.ptProng0());
+    registry.fill(HIST("hPtProng1"), candidate.ptProng1());
+    registry.fill(HIST("hDecLength"), candidate.decayLength(), ptCandidate);
+    registry.fill(HIST("hDecLengthxy"), candidate.decayLengthXY(), ptCandidate);
+    registry.fill(HIST("hDecLenErr"), candidate.errorDecayLength(), ptCandidate);
+    registry.fill(HIST("hDecLenXYErr"), candidate.errorDecayLengthXY(), ptCandidate);
+    registry.fill(HIST("hNormalisedDecLength"), candidate.decayLengthNormalised(), ptCandidate);
+    registry.fill(HIST("hNormalisedDecLengthxy"), candidate.decayLengthXYNormalised(), ptCandidate);
+    registry.fill(HIST("hd0Prong0"), candidate.impactParameter0(), ptCandidate);
+    registry.fill(HIST("hd0Prong1"), candidate.impactParameter1(), ptCandidate);
+    registry.fill(HIST("hd0ErrProng0"), candidate.errorImpactParameter0(), ptCandidate);
+    registry.fill(HIST("hd0ErrProng1"), candidate.errorImpactParameter1(), ptCandidate);
+    registry.fill(HIST("hd0d0"), candidate.impactParameterProduct(), ptCandidate);
+    registry.fill(HIST("hCTS"), HfHelper::cosThetaStarD0(candidate), ptCandidate);
+    registry.fill(HIST("hCt"), HfHelper::ctD0(candidate), ptCandidate);
+    registry.fill(HIST("hCPA"), candidate.cpa(), ptCandidate);
+    registry.fill(HIST("hEta"), candidate.eta(), ptCandidate);
+    registry.fill(HIST("hSelectionStatus"), candidate.isSelD0() + (candidate.isSelD0bar() * 2), ptCandidate);
+    registry.fill(HIST("hDecLengthFinerBinning"), candidate.decayLength(), ptCandidate);
+    registry.fill(HIST("hDecLengthxyFinerBinning"), candidate.decayLengthXY(), ptCandidate);
+    registry.fill(HIST("hd0Prong0FinerBinning"), candidate.impactParameter0(), ptCandidate);
+    registry.fill(HIST("hd0Prong1FinerBinning"), candidate.impactParameter1(), ptCandidate);
+    registry.fill(HIST("hd0d0FinerBinning"), candidate.impactParameterProduct(), ptCandidate);
+    registry.fill(HIST("hCTSFinerBinning"), HfHelper::cosThetaStarD0(candidate), ptCandidate);
+    registry.fill(HIST("hCtFinerBinning"), HfHelper::ctD0(candidate), ptCandidate);
+    registry.fill(HIST("hCPAFinerBinning"), candidate.cpa(), ptCandidate);
+    registry.fill(HIST("hCPAXYFinerBinning"), candidate.cpaXY(), ptCandidate);
+
+    //Initialize centrality and occupancy values, default = -1 : means we dont use by default
+    float cent{-1.f};
+    float occ{-1.f};
+    float ir{-1.f};
+    int numPvContributors = -1;
+    //Only store this info, if either storer is active
+    if (storeCentrality || storeOccupancyAndIR) {
+      //Gets the collision the candidate came from
+      auto collision = candidate.template collision_as<CollType>();
+      //if cent storage and proper estimater are active: get that info
+      if (storeCentrality && centEstimator != CentralityEstimator::None) {
+        cent = getCentralityColl(collision, centEstimator);
+        numPvContributors = collision.numContrib();
+      }
+      //if OC & IR storage and estimator are active: get that info
+      if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
+        occ = o2::hf_occupancy::getOccupancyColl(collision, occEstimator);
+        //gets the specific bunch crossing a collision came from
+        auto bc = collision.template foundBC_as<BCsType>();
+        ir = mRateFetcher.fetch(ccdb.service, bc.timestamp(), bc.runNumber(), irSource, true) * 1.e-3; // kHz
+      }
+    }
+
+    auto trackPos = candidate.template prong0_as<o2::aod::TracksWExtra>(); // positive daughter
+    auto trackNeg = candidate.template prong1_as<o2::aod::TracksWExtra>(); // negative daughter
+    //Whichever prong has less ITS clusters, take that value
+    int const minItsClustersOfProngs = std::min(trackPos.itsNCls(), trackNeg.itsNCls());
+    //Whichever prong has less TPC crossed rows, take that value
+    int const minTpcCrossedRowsOfProngs = std::min(trackPos.tpcNClsCrossedRows(), trackNeg.tpcNClsCrossedRows());
+    //Fills histograms with ML info for different hypotheses and possible extra storage of Cent, IR, Occ, etc.
+    if constexpr (ApplyMl) {
+      if (storeCentrality && storeOccupancyAndIR) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors, occ, ir);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors, occ, ir);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors, occ, ir);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors, occ, ir);
+        }
+      } else if (storeCentrality && !storeOccupancyAndIR) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors);
+        }
+      } else if (!storeCentrality && storeOccupancyAndIR) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, occ, ir);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, occ, ir);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, occ, ir);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, occ, ir);
+        }
+      } else if (storeTrackQuality) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+        }
+      } else {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar);
+          registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
+        }
+      }
+    } else {
+      if (storeCentrality && storeOccupancyAndIR) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors, occ, ir);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors, occ, ir);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors, occ, ir);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors, occ, ir);
+        }
+      } else if (storeCentrality && !storeOccupancyAndIR) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors);
+        }
+      } else if (!storeCentrality && storeOccupancyAndIR) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, occ, ir);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, occ, ir);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, occ, ir);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, occ, ir);
+        }
+      } else if (storeTrackQuality) {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
+        }
+      } else {
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0);
+        }
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar);
+          registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
+        }
+      }
+    }
+  }
+
   //Template function: Allows processData to work with different configurations
   template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
   void processData(CandType const& candidates,
@@ -533,199 +799,159 @@ struct HfTaskD0 {
                    aod::TracksWExtra const&,
                    BCsType const&)
   {
-    //Loop over candidates, candidate is predefined join of tables
     for (const auto& candidate : candidates) {
-      //Bitmask check: if candidate not flagged as D->K pi, skip it
-      if (!(candidate.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
-        continue;
-      }
-      //Rapidity cut: is max rap > 0? and is rap between allowed values? if not, skip 
-      if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
-        continue;
-      }
+      fillD0HistogramsData<ReconstructionType, ApplyMl, CollType, BCsType>(candidate);
+    }
+    // TODO: Slice D0 and D* candidates by collision, then call the D* and
+    // tetraquark helpers. Fill single-species spectra outside the pair loop.
+  }
 
-      //initialize D0 and anti-D0 masses
-      float massD0{0.f}, massD0bar{0.f};
-      //Which mass we use, checks at compile time? If we use KfP, use their mass. Else: use mass from candidate using HfHelper
-      if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
-        massD0 = candidate.kfGeoMassD0();
-        massD0bar = candidate.kfGeoMassD0bar();
+  // D0 candidate filling with the accepted collision's UPC context.
+  template <bool FillMl, typename CandidateType>
+  void fillD0HistogramsDataWithUpc(CandidateType const& candidate,
+                                 UpcCollisionContext const& context)
+  {
+    const auto centrality = context.centrality;
+    const auto occ = context.occupancy;
+    const auto ir = context.interactionRate;
+    const auto gap = context.gap;
+    const auto numPvContributors = context.numPvContributors;
+    const auto& fitInfo = context.fitInfo;
+    const auto zdcEnergyZNA = context.zdcEnergyZNA;
+    const auto zdcEnergyZNC = context.zdcEnergyZNC;
+    const auto zdcTimeZNA = context.zdcTimeZNA;
+    const auto zdcTimeZNC = context.zdcTimeZNC;
+
+    if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
+      return;
+    }
+
+    const float massD0 = HfHelper::invMassD0ToPiK(candidate);
+    const float massD0bar = HfHelper::invMassD0barToKPi(candidate);
+    const auto ptCandidate = candidate.pt();
+
+    auto track0 = candidate.template prong0_as<TracksWPid>();
+    auto track1 = candidate.template prong1_as<TracksWPid>();
+
+    registry.fill(HIST("Data/hGapVsEtaTrack0"), gap, track0.eta());
+    registry.fill(HIST("Data/hGapVsEtaTrack1"), gap, track1.eta());
+    registry.fill(HIST("Data/hGapVsRap"), gap, HfHelper::yD0(candidate));
+
+    if (gap == 0 && candidate.isSelD0() >= selectionFlagD0) { // A side // D0 --> K-Pi+
+      registry.fill(HIST("Data/hTPCnSigProng0Pion_GapA"), track0.p(), track0.tpcNSigmaPi());
+      registry.fill(HIST("Data/hTPCnSigProng1Kaon_GapA"), track1.p(), track1.tpcNSigmaKa());
+      registry.fill(HIST("Data/hTOFnSigProng0Pion_GapA"), track0.p(), track0.tofNSigmaPi());
+      registry.fill(HIST("Data/hTOFnSigProng1Kaon_GapA"), track1.p(), track1.tofNSigmaKa());
+      registry.fill(HIST("Data/hTpcTofnSigProng0Pion_GapA"), track0.p(), track0.tpcTofNSigmaPi());
+      registry.fill(HIST("Data/hTpcTofnSigProng1Kaon_GapA"), track1.p(), track1.tpcTofNSigmaKa());
+    }
+
+    if (gap == 0 && candidate.isSelD0bar() >= selectionFlagD0) { // A side // D0-bar --> K+Pi-
+      registry.fill(HIST("Data/hTPCnSigProng0Kaon_GapA"), track0.p(), track0.tpcNSigmaKa());
+      registry.fill(HIST("Data/hTPCnSigProng1Pion_GapA"), track1.p(), track1.tpcNSigmaPi());
+      registry.fill(HIST("Data/hTOFnSigProng0Kaon_GapA"), track0.p(), track0.tofNSigmaKa());
+      registry.fill(HIST("Data/hTOFnSigProng1Pion_GapA"), track1.p(), track1.tofNSigmaPi());
+      registry.fill(HIST("Data/hTpcTofnSigProng0Kaon_GapA"), track0.p(), track0.tpcTofNSigmaKa());
+      registry.fill(HIST("Data/hTpcTofnSigProng1Pion_GapA"), track1.p(), track1.tpcTofNSigmaPi());
+    }
+
+    if (gap == 1 && candidate.isSelD0() >= selectionFlagD0) { // C side // D0 --> K-Pi+
+      registry.fill(HIST("Data/hTPCnSigProng0Pion_GapC"), track0.p(), track0.tpcNSigmaPi());
+      registry.fill(HIST("Data/hTPCnSigProng1Kaon_GapC"), track1.p(), track1.tpcNSigmaKa());
+      registry.fill(HIST("Data/hTOFnSigProng0Pion_GapC"), track0.p(), track0.tofNSigmaPi());
+      registry.fill(HIST("Data/hTOFnSigProng1Kaon_GapC"), track1.p(), track1.tofNSigmaKa());
+      registry.fill(HIST("Data/hTpcTofnSigProng0Pion_GapC"), track0.p(), track0.tpcTofNSigmaPi());
+      registry.fill(HIST("Data/hTpcTofnSigProng1Kaon_GapC"), track1.p(), track1.tpcTofNSigmaKa());
+    }
+
+    if (gap == 1 && candidate.isSelD0bar() >= selectionFlagD0) { // C side // D0-bar --> K+Pi-
+      registry.fill(HIST("Data/hTPCnSigProng0Kaon_GapC"), track0.p(), track0.tpcNSigmaKa());
+      registry.fill(HIST("Data/hTPCnSigProng1Pion_GapC"), track1.p(), track1.tpcNSigmaPi());
+      registry.fill(HIST("Data/hTOFnSigProng0Kaon_GapC"), track0.p(), track0.tofNSigmaKa());
+      registry.fill(HIST("Data/hTOFnSigProng1Pion_GapC"), track1.p(), track1.tofNSigmaPi());
+      registry.fill(HIST("Data/hTpcTofnSigProng0Kaon_GapC"), track0.p(), track0.tpcTofNSigmaKa());
+      registry.fill(HIST("Data/hTpcTofnSigProng1Pion_GapC"), track1.p(), track1.tpcTofNSigmaPi());
+    }
+
+    if (candidate.isSelD0() >= selectionFlagD0) {
+      registry.fill(HIST("hMass"), massD0, ptCandidate);
+      registry.fill(HIST("hMassFinerBinning"), massD0, ptCandidate);
+      registry.fill(HIST("hMassVsPhi"), massD0, ptCandidate, candidate.phi());
+    }
+    if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+      registry.fill(HIST("hMass"), massD0bar, ptCandidate);
+      registry.fill(HIST("hMassFinerBinning"), massD0bar, ptCandidate);
+      registry.fill(HIST("hMassVsPhi"), massD0bar, ptCandidate, candidate.phi());
+    }
+
+    // Fill THnSparse with structure matching histogram axes: [mass, pt, (mlScores if FillMl), rapidity, d0Type, (cent if storeCentrality), (occ, ir if storeOccupancyAndIR), gapType, FT0A, FT0C, FV0A, FDDA, FDDC, ZNA, ZNC]
+    auto fillTHnData = [&](float mass, int d0Type) {
+      // Pre-calculate vector size to avoid reallocations
+      constexpr int NAxesBase = 11;                       // mass, pt, rapidity, d0Type, gapType, FT0A, FT0C, FV0A, FDDA, FDDC, ZNA, ZNC, nPVcontr
+      constexpr int NAxesMl = FillMl ? 3 : 0;             // 3 ML scores if FillMl
+      int const nAxesCent = storeCentrality ? 1 : 0;      // centrality if storeCentrality
+      int const nAxesOccIR = storeOccupancyAndIR ? 2 : 0; // occupancy and IR if storeOccupancyAndIR
+      int const nAxesZdcEnergy = storeZdcEnergy ? 2 : 0;  // ZDC energy if storeZdcEnergy
+      int const nAxesZdcTime = storeZdcTime ? 2 : 0;      // ZDC time if storeZdctime
+      int const nAxesEtaProngs = storeEtaProngs ? 2 : 0;  // Eta distributions of prong
+      int const nAxesTotal = NAxesBase + NAxesMl + nAxesCent + nAxesOccIR + nAxesZdcEnergy + nAxesZdcTime + nAxesEtaProngs;
+
+      std::vector<double> valuesToFill;
+      valuesToFill.reserve(nAxesTotal);
+
+      // Fill values in order matching histogram axes
+      valuesToFill.push_back(static_cast<double>(mass));
+      valuesToFill.push_back(static_cast<double>(ptCandidate));
+      if constexpr (FillMl) {
+        auto const& mlScores = candidate.mlProbD0();
+        if (mlScores.size() == NAxesMl) {
+          valuesToFill.push_back(mlScores[0]);
+          valuesToFill.push_back(mlScores[1]);
+          valuesToFill.push_back(mlScores[2]);
+        }
+      }
+      valuesToFill.push_back(static_cast<double>(HfHelper::yD0(candidate)));
+      valuesToFill.push_back(static_cast<double>(d0Type));
+      if (storeCentrality) {
+        valuesToFill.push_back(centrality);
+      }
+      if (storeOccupancyAndIR) {
+        valuesToFill.push_back(occ);
+        valuesToFill.push_back(ir);
+      }
+      valuesToFill.push_back(static_cast<double>(gap));
+      valuesToFill.push_back(static_cast<double>(fitInfo.ampFT0A));
+      valuesToFill.push_back(static_cast<double>(fitInfo.ampFT0C));
+      valuesToFill.push_back(static_cast<double>(fitInfo.ampFV0A));
+      valuesToFill.push_back(static_cast<double>(fitInfo.ampFDDA));
+      valuesToFill.push_back(static_cast<double>(fitInfo.ampFDDC));
+      valuesToFill.push_back(static_cast<double>(numPvContributors));
+      if (storeZdcEnergy) {
+        valuesToFill.push_back(static_cast<double>(zdcEnergyZNA));
+        valuesToFill.push_back(static_cast<double>(zdcEnergyZNC));
+      }
+      if (storeZdcTime) {
+        valuesToFill.push_back(static_cast<double>(zdcTimeZNA));
+        valuesToFill.push_back(static_cast<double>(zdcTimeZNC));
+      }
+      if (storeEtaProngs) {
+        valuesToFill.push_back(static_cast<double>(track0.eta()));
+        valuesToFill.push_back(static_cast<double>(track1.eta()));
+      }
+      if constexpr (FillMl) {
+        registry.get<THnSparse>(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"))->Fill(valuesToFill.data());
       } else {
-        massD0 = HfHelper::invMassD0ToPiK(candidate);
-        massD0bar = HfHelper::invMassD0barToKPi(candidate);
+        registry.get<THnSparse>(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"))->Fill(valuesToFill.data());
       }
-      //retrieve D0 candidate p_T
-      auto ptCandidate = candidate.pt();
+    };
 
-      //Fills histograms based on hypothesis, candidate can pass both!
-      //If passes D0 hypothesis, fill histograms
-      if (candidate.isSelD0() >= selectionFlagD0) {
-        registry.fill(HIST("hMass"), massD0, ptCandidate);
-        registry.fill(HIST("hMassFinerBinning"), massD0, ptCandidate);
-        registry.fill(HIST("hMassVsPhi"), massD0, ptCandidate, candidate.phi());
-      }
-      //If passes D0bar hypothesis, fill histograms
-      if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-        registry.fill(HIST("hMass"), massD0bar, ptCandidate);
-        registry.fill(HIST("hMassFinerBinning"), massD0bar, ptCandidate);
-        registry.fill(HIST("hMassVsPhi"), massD0bar, ptCandidate, candidate.phi());
-      }
-      //Fills a bunch of histograms for candidates that pass previous checks/cuts
-      //NOTE: does not check D0/D0bar hypothesis, histogram is filled once for each candidate
-      registry.fill(HIST("hPtCand"), ptCandidate);
-      registry.fill(HIST("hPtProng0"), candidate.ptProng0());
-      registry.fill(HIST("hPtProng1"), candidate.ptProng1());
-      registry.fill(HIST("hDecLength"), candidate.decayLength(), ptCandidate);
-      registry.fill(HIST("hDecLengthxy"), candidate.decayLengthXY(), ptCandidate);
-      registry.fill(HIST("hDecLenErr"), candidate.errorDecayLength(), ptCandidate);
-      registry.fill(HIST("hDecLenXYErr"), candidate.errorDecayLengthXY(), ptCandidate);
-      registry.fill(HIST("hNormalisedDecLength"), candidate.decayLengthNormalised(), ptCandidate);
-      registry.fill(HIST("hNormalisedDecLengthxy"), candidate.decayLengthXYNormalised(), ptCandidate);
-      registry.fill(HIST("hd0Prong0"), candidate.impactParameter0(), ptCandidate);
-      registry.fill(HIST("hd0Prong1"), candidate.impactParameter1(), ptCandidate);
-      registry.fill(HIST("hd0ErrProng0"), candidate.errorImpactParameter0(), ptCandidate);
-      registry.fill(HIST("hd0ErrProng1"), candidate.errorImpactParameter1(), ptCandidate);
-      registry.fill(HIST("hd0d0"), candidate.impactParameterProduct(), ptCandidate);
-      registry.fill(HIST("hCTS"), HfHelper::cosThetaStarD0(candidate), ptCandidate);
-      registry.fill(HIST("hCt"), HfHelper::ctD0(candidate), ptCandidate);
-      registry.fill(HIST("hCPA"), candidate.cpa(), ptCandidate);
-      registry.fill(HIST("hEta"), candidate.eta(), ptCandidate);
-      registry.fill(HIST("hSelectionStatus"), candidate.isSelD0() + (candidate.isSelD0bar() * 2), ptCandidate);
-      registry.fill(HIST("hDecLengthFinerBinning"), candidate.decayLength(), ptCandidate);
-      registry.fill(HIST("hDecLengthxyFinerBinning"), candidate.decayLengthXY(), ptCandidate);
-      registry.fill(HIST("hd0Prong0FinerBinning"), candidate.impactParameter0(), ptCandidate);
-      registry.fill(HIST("hd0Prong1FinerBinning"), candidate.impactParameter1(), ptCandidate);
-      registry.fill(HIST("hd0d0FinerBinning"), candidate.impactParameterProduct(), ptCandidate);
-      registry.fill(HIST("hCTSFinerBinning"), HfHelper::cosThetaStarD0(candidate), ptCandidate);
-      registry.fill(HIST("hCtFinerBinning"), HfHelper::ctD0(candidate), ptCandidate);
-      registry.fill(HIST("hCPAFinerBinning"), candidate.cpa(), ptCandidate);
-      registry.fill(HIST("hCPAXYFinerBinning"), candidate.cpaXY(), ptCandidate);
-
-      //Initialize centrality and occupancy values, default = -1 : means we dont use by default
-      float cent{-1.f};
-      float occ{-1.f};
-      float ir{-1.f};
-      int numPvContributors = -1;
-      //Only store this info, if either storer is active
-      if (storeCentrality || storeOccupancyAndIR) {
-        //Gets the collision the candidate came from
-        auto collision = candidate.template collision_as<CollType>();
-        //if cent storage and proper estimater are active: get that info
-        if (storeCentrality && centEstimator != CentralityEstimator::None) {
-          cent = getCentralityColl(collision, centEstimator);
-          numPvContributors = collision.numContrib();
-        }
-        //if OC & IR storage and estimator are active: get that info
-        if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
-          occ = o2::hf_occupancy::getOccupancyColl(collision, occEstimator);
-          //gets the specific bunch crossing a collision came from
-          auto bc = collision.template foundBC_as<BCsType>();
-          ir = mRateFetcher.fetch(ccdb.service, bc.timestamp(), bc.runNumber(), irSource, true) * 1.e-3; // kHz
-        }
-      }
-
-      auto trackPos = candidate.template prong0_as<o2::aod::TracksWExtra>(); // positive daughter
-      auto trackNeg = candidate.template prong1_as<o2::aod::TracksWExtra>(); // negative daughter
-      //Whichever prong has less ITS clusters, take that value
-      int const minItsClustersOfProngs = std::min(trackPos.itsNCls(), trackNeg.itsNCls());
-      //Whichever prong has less TPC crossed rows, take that value
-      int const minTpcCrossedRowsOfProngs = std::min(trackPos.tpcNClsCrossedRows(), trackNeg.tpcNClsCrossedRows());
-      //Fills histograms with ML info for different hypotheses and possible extra storage of Cent, IR, Occ, etc.
-      if constexpr (ApplyMl) {
-        if (storeCentrality && storeOccupancyAndIR) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors, occ, ir);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors, occ, ir);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors, occ, ir);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors, occ, ir);
-          }
-        } else if (storeCentrality && !storeOccupancyAndIR) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors);
-          }
-        } else if (!storeCentrality && storeOccupancyAndIR) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, occ, ir);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, occ, ir);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, occ, ir);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, occ, ir);
-          }
-        } else if (storeTrackQuality) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-          }
-        } else {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), SigD0);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar);
-            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
-          }
-        }
-      } else {
-        if (storeCentrality && storeOccupancyAndIR) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors, occ, ir);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors, occ, ir);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors, occ, ir);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors, occ, ir);
-          }
-        } else if (storeCentrality && !storeOccupancyAndIR) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, cent, numPvContributors);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, cent, numPvContributors);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, cent, numPvContributors);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, cent, numPvContributors);
-          }
-        } else if (!storeCentrality && storeOccupancyAndIR) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, occ, ir);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, occ, ir);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar, occ, ir);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar, occ, ir);
-          }
-        } else if (storeTrackQuality) {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
-          }
-        } else {
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), SigD0);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0bar() ? ReflectedD0 : PureSigD0);
-          }
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), SigD0bar);
-            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, HfHelper::yD0(candidate), candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
-          }
-        }
-      }
+    if (candidate.isSelD0() >= selectionFlagD0) {
+      fillTHnData(massD0, SigD0);
+      fillTHnData(massD0, candidate.isSelD0bar() ? ReflectedD0 : PureSigD0);
+    }
+    if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+      fillTHnData(massD0bar, SigD0bar);
+      fillTHnData(massD0bar, candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
     }
   }
 
@@ -847,139 +1073,14 @@ struct HfTaskD0 {
         }
       }
 
+      const UpcCollisionContext context{
+        centrality, occ, ir, gap, numPvContributors, fitInfo,
+        zdcEnergyZNA, zdcEnergyZNC, zdcTimeZNA, zdcTimeZNC};
       for (const auto& candidate : groupedD0Candidates) {
-        if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
-          continue;
-        }
-
-        const float massD0 = HfHelper::invMassD0ToPiK(candidate);
-        const float massD0bar = HfHelper::invMassD0barToKPi(candidate);
-        const auto ptCandidate = candidate.pt();
-
-        auto track0 = candidate.template prong0_as<TracksWPid>();
-        auto track1 = candidate.template prong1_as<TracksWPid>();
-
-        registry.fill(HIST("Data/hGapVsEtaTrack0"), gap, track0.eta());
-        registry.fill(HIST("Data/hGapVsEtaTrack1"), gap, track1.eta());
-        registry.fill(HIST("Data/hGapVsRap"), gap, HfHelper::yD0(candidate));
-
-        if (gap == 0 && candidate.isSelD0() >= selectionFlagD0) { // A side // D0 --> K-Pi+
-          registry.fill(HIST("Data/hTPCnSigProng0Pion_GapA"), track0.p(), track0.tpcNSigmaPi());
-          registry.fill(HIST("Data/hTPCnSigProng1Kaon_GapA"), track1.p(), track1.tpcNSigmaKa());
-          registry.fill(HIST("Data/hTOFnSigProng0Pion_GapA"), track0.p(), track0.tofNSigmaPi());
-          registry.fill(HIST("Data/hTOFnSigProng1Kaon_GapA"), track1.p(), track1.tofNSigmaKa());
-          registry.fill(HIST("Data/hTpcTofnSigProng0Pion_GapA"), track0.p(), track0.tpcTofNSigmaPi());
-          registry.fill(HIST("Data/hTpcTofnSigProng1Kaon_GapA"), track1.p(), track1.tpcTofNSigmaKa());
-        }
-
-        if (gap == 0 && candidate.isSelD0bar() >= selectionFlagD0) { // A side // D0-bar --> K+Pi-
-          registry.fill(HIST("Data/hTPCnSigProng0Kaon_GapA"), track0.p(), track0.tpcNSigmaKa());
-          registry.fill(HIST("Data/hTPCnSigProng1Pion_GapA"), track1.p(), track1.tpcNSigmaPi());
-          registry.fill(HIST("Data/hTOFnSigProng0Kaon_GapA"), track0.p(), track0.tofNSigmaKa());
-          registry.fill(HIST("Data/hTOFnSigProng1Pion_GapA"), track1.p(), track1.tofNSigmaPi());
-          registry.fill(HIST("Data/hTpcTofnSigProng0Kaon_GapA"), track0.p(), track0.tpcTofNSigmaKa());
-          registry.fill(HIST("Data/hTpcTofnSigProng1Pion_GapA"), track1.p(), track1.tpcTofNSigmaPi());
-        }
-
-        if (gap == 1 && candidate.isSelD0() >= selectionFlagD0) { // C side // D0 --> K-Pi+
-          registry.fill(HIST("Data/hTPCnSigProng0Pion_GapC"), track0.p(), track0.tpcNSigmaPi());
-          registry.fill(HIST("Data/hTPCnSigProng1Kaon_GapC"), track1.p(), track1.tpcNSigmaKa());
-          registry.fill(HIST("Data/hTOFnSigProng0Pion_GapC"), track0.p(), track0.tofNSigmaPi());
-          registry.fill(HIST("Data/hTOFnSigProng1Kaon_GapC"), track1.p(), track1.tofNSigmaKa());
-          registry.fill(HIST("Data/hTpcTofnSigProng0Pion_GapC"), track0.p(), track0.tpcTofNSigmaPi());
-          registry.fill(HIST("Data/hTpcTofnSigProng1Kaon_GapC"), track1.p(), track1.tpcTofNSigmaKa());
-        }
-
-        if (gap == 1 && candidate.isSelD0bar() >= selectionFlagD0) { // C side // D0-bar --> K+Pi-
-          registry.fill(HIST("Data/hTPCnSigProng0Kaon_GapC"), track0.p(), track0.tpcNSigmaKa());
-          registry.fill(HIST("Data/hTPCnSigProng1Pion_GapC"), track1.p(), track1.tpcNSigmaPi());
-          registry.fill(HIST("Data/hTOFnSigProng0Kaon_GapC"), track0.p(), track0.tofNSigmaKa());
-          registry.fill(HIST("Data/hTOFnSigProng1Pion_GapC"), track1.p(), track1.tofNSigmaPi());
-          registry.fill(HIST("Data/hTpcTofnSigProng0Kaon_GapC"), track0.p(), track0.tpcTofNSigmaKa());
-          registry.fill(HIST("Data/hTpcTofnSigProng1Pion_GapC"), track1.p(), track1.tpcTofNSigmaPi());
-        }
-
-        if (candidate.isSelD0() >= selectionFlagD0) {
-          registry.fill(HIST("hMass"), massD0, ptCandidate);
-          registry.fill(HIST("hMassFinerBinning"), massD0, ptCandidate);
-          registry.fill(HIST("hMassVsPhi"), massD0, ptCandidate, candidate.phi());
-        }
-        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-          registry.fill(HIST("hMass"), massD0bar, ptCandidate);
-          registry.fill(HIST("hMassFinerBinning"), massD0bar, ptCandidate);
-          registry.fill(HIST("hMassVsPhi"), massD0bar, ptCandidate, candidate.phi());
-        }
-
-        // Fill THnSparse with structure matching histogram axes: [mass, pt, (mlScores if FillMl), rapidity, d0Type, (cent if storeCentrality), (occ, ir if storeOccupancyAndIR), gapType, FT0A, FT0C, FV0A, FDDA, FDDC, ZNA, ZNC]
-        auto fillTHnData = [&](float mass, int d0Type) {
-          // Pre-calculate vector size to avoid reallocations
-          constexpr int NAxesBase = 11;                       // mass, pt, rapidity, d0Type, gapType, FT0A, FT0C, FV0A, FDDA, FDDC, ZNA, ZNC, nPVcontr
-          constexpr int NAxesMl = FillMl ? 3 : 0;             // 3 ML scores if FillMl
-          int const nAxesCent = storeCentrality ? 1 : 0;      // centrality if storeCentrality
-          int const nAxesOccIR = storeOccupancyAndIR ? 2 : 0; // occupancy and IR if storeOccupancyAndIR
-          int const nAxesZdcEnergy = storeZdcEnergy ? 2 : 0;  // ZDC energy if storeZdcEnergy
-          int const nAxesZdcTime = storeZdcTime ? 2 : 0;      // ZDC time if storeZdctime
-          int const nAxesEtaProngs = storeEtaProngs ? 2 : 0;  // Eta distributions of prong
-          int const nAxesTotal = NAxesBase + NAxesMl + nAxesCent + nAxesOccIR + nAxesZdcEnergy + nAxesZdcTime + nAxesEtaProngs;
-
-          std::vector<double> valuesToFill;
-          valuesToFill.reserve(nAxesTotal);
-
-          // Fill values in order matching histogram axes
-          valuesToFill.push_back(static_cast<double>(mass));
-          valuesToFill.push_back(static_cast<double>(ptCandidate));
-          if constexpr (FillMl) {
-            auto const& mlScores = candidate.mlProbD0();
-            if (mlScores.size() == NAxesMl) {
-              valuesToFill.push_back(mlScores[0]);
-              valuesToFill.push_back(mlScores[1]);
-              valuesToFill.push_back(mlScores[2]);
-            }
-          }
-          valuesToFill.push_back(static_cast<double>(HfHelper::yD0(candidate)));
-          valuesToFill.push_back(static_cast<double>(d0Type));
-          if (storeCentrality) {
-            valuesToFill.push_back(centrality);
-          }
-          if (storeOccupancyAndIR) {
-            valuesToFill.push_back(occ);
-            valuesToFill.push_back(ir);
-          }
-          valuesToFill.push_back(static_cast<double>(gap));
-          valuesToFill.push_back(static_cast<double>(fitInfo.ampFT0A));
-          valuesToFill.push_back(static_cast<double>(fitInfo.ampFT0C));
-          valuesToFill.push_back(static_cast<double>(fitInfo.ampFV0A));
-          valuesToFill.push_back(static_cast<double>(fitInfo.ampFDDA));
-          valuesToFill.push_back(static_cast<double>(fitInfo.ampFDDC));
-          valuesToFill.push_back(static_cast<double>(numPvContributors));
-          if (storeZdcEnergy) {
-            valuesToFill.push_back(static_cast<double>(zdcEnergyZNA));
-            valuesToFill.push_back(static_cast<double>(zdcEnergyZNC));
-          }
-          if (storeZdcTime) {
-            valuesToFill.push_back(static_cast<double>(zdcTimeZNA));
-            valuesToFill.push_back(static_cast<double>(zdcTimeZNC));
-          }
-          if (storeEtaProngs) {
-            valuesToFill.push_back(static_cast<double>(track0.eta()));
-            valuesToFill.push_back(static_cast<double>(track1.eta()));
-          }
-          if constexpr (FillMl) {
-            registry.get<THnSparse>(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"))->Fill(valuesToFill.data());
-          } else {
-            registry.get<THnSparse>(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"))->Fill(valuesToFill.data());
-          }
-        };
-
-        if (candidate.isSelD0() >= selectionFlagD0) {
-          fillTHnData(massD0, SigD0);
-          fillTHnData(massD0, candidate.isSelD0bar() ? ReflectedD0 : PureSigD0);
-        }
-        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-          fillTHnData(massD0bar, SigD0bar);
-          fillTHnData(massD0bar, candidate.isSelD0() ? ReflectedD0bar : PureSigD0bar);
-        }
+        fillD0HistogramsDataWithUpc<FillMl>(candidate, context);
       }
+      // TODO: Obtain this collision's D* slice here and call the UPC D* and
+      // tetraquark helpers with the same context (without repeating event QA).
     }
   }
 
@@ -1021,343 +1122,340 @@ struct HfTaskD0 {
   PROCESS_SWITCH(HfTaskD0, processDataWithKFParticleMl, "process taskD0 with KFParticle and ML selections", false);
   // TODO: add processKFParticleMlCent
 
-  //Template function to allow this processMc to work with different configurations
-  template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
-  void processMc(CandType const& candidates,
-                 soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
-                 TracksSelQuality const&,
-                 CollType const& collisions,
-                 McCollisionsWithCentrality const&,
-                 BCsType const&)
+  // Reconstructed D0 candidate filling, including signal/background matching.
+  template <int ReconstructionType, bool ApplyMl, typename CollType, typename BCsType, typename CandidateType>
+  void fillD0HistogramsMcRec(CandidateType const& candidate,
+                           soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles)
   {
-    // MC rec.
-    //Loop over reconstructed candidates
-    for (const auto& candidate : candidates) {
-      //Check if candidate passes HF flag, if not: skip
-      if (!(candidate.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
-        continue;
-      }
-      //Check if candidate is within correctly set rapidity values, if not: skip
-      if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
-        continue;
-      }
+    //Check if candidate passes HF flag, if not: skip
+    if (!(candidate.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
+      return;
+    }
+    //Check if candidate is within correctly set rapidity values, if not: skip
+    if (yCandRecoMax >= 0. && std::abs(HfHelper::yD0(candidate)) > yCandRecoMax) {
+      return;
+    }
 
-      //Initialize centrality, occupancy, IR, etc. info, default = -1 : dont use
-      float cent{-1.f};
-      float occ{-1.f};
-      float ir{-1.f};
-      //get collision that candidate came from
-      auto collision = candidate.template collision_as<CollType>();
-      auto numPvContributors = collision.numContrib();
-      //If centrality storage and estimator are active, get info
-      if (storeCentrality && centEstimator != CentralityEstimator::None) {
-        cent = getCentralityColl(collision, centEstimator);
+    //Initialize centrality, occupancy, IR, etc. info, default = -1 : dont use
+    float cent{-1.f};
+    float occ{-1.f};
+    float ir{-1.f};
+    //get collision that candidate came from
+    auto collision = candidate.template collision_as<CollType>();
+    auto numPvContributors = collision.numContrib();
+    //If centrality storage and estimator are active, get info
+    if (storeCentrality && centEstimator != CentralityEstimator::None) {
+      cent = getCentralityColl(collision, centEstimator);
+    }
+    //If Occupancy and IR storage and estimator are active, get info
+    if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
+      occ = o2::hf_occupancy::getOccupancyColl(collision, occEstimator);
+      //get Bunch-Crossing where collision came from
+      auto bc = collision.template foundBC_as<BCsType>();
+      ir = mRateFetcher.fetch(ccdb.service, bc.timestamp(), bc.runNumber(), irSource, true) * 1.e-3; // kHz
+    }
+    //Initialize D0/D0bar mass
+    float massD0{0.f}, massD0bar{0.f};
+    //If using KfParticle RecoType, get mass from that 
+    if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
+      massD0 = candidate.kfGeoMassD0();
+      massD0bar = candidate.kfGeoMassD0bar();
+    //If using DCAFitterN, get mass from candidate using HfHelper
+    } else {
+      massD0 = HfHelper::invMassD0ToPiK(candidate);
+      massD0bar = HfHelper::invMassD0barToKPi(candidate);
+    }
+    auto trackPos = candidate.template prong0_as<TracksSelQuality>(); // positive daughter
+    auto trackNeg = candidate.template prong1_as<TracksSelQuality>(); // negative daughter
+    //Check if reconstructed candidate is actual D0->piK using MC truth info
+    if (std::abs(candidate.flagMcMatchRec()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
+      // Get the corresponding MC particle.
+      auto indexMother = RecoDecay::getMother(mcParticles, trackPos.template mcParticle_as<soa::Join<aod::McParticles, aod::HfCand2ProngMcGen>>(), o2::constants::physics::Pdg::kD0, true);
+      auto particleMother = mcParticles.rawIteratorAt(indexMother);
+      auto ptGen = particleMother.pt();                                                   // gen. level pT
+      auto yGen = RecoDecay::y(particleMother.pVector(), o2::constants::physics::MassD0); // gen. level y
+      registry.fill(HIST("hPtGenSig"), ptGen);                                            // gen. level pT
+      auto ptRec = candidate.pt();
+      auto yRec = HfHelper::yD0(candidate);
+      //Checks if reconstructed particle satisfied HF flag
+      if (candidate.isRecoHfFlag() >= selectionFlagHf) {
+        //Fills generated vs reconstructed obsverables histograms
+        registry.fill(HIST("hPtVsYRecSigRecoHFFlag"), ptRec, yRec);
+        registry.fill(HIST("hPtGenVsPtRecSig"), ptGen, ptRec);
+        registry.fill(HIST("hYGenVsYRecSig"), yGen, yRec);
+        if (candidate.isSelD0() >= selectionFlagD0) {
+          //If candidate satisfies D0 hypothesis, fill 3d histogram
+          registry.fill(HIST("hMassVsPtGenVsPtRecSig"), massD0, ptGen, ptRec);
+        }
+        //If candidate satisfies D0bar hypothesis, fill 3d histogram
+        if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hMassVsPtGenVsPtRecSig"), massD0bar, ptGen, ptRec);
+        }
       }
-      //If Occupancy and IR storage and estimator are active, get info
-      if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
-        occ = o2::hf_occupancy::getOccupancyColl(collision, occEstimator);
-        //get Bunch-Crossing where collision came from
-        auto bc = collision.template foundBC_as<BCsType>();
-        ir = mRateFetcher.fetch(ccdb.service, bc.timestamp(), bc.runNumber(), irSource, true) * 1.e-3; // kHz
+      //If candidate passes Topolofical Selection, fill histogram
+      if (candidate.isRecoTopol() >= selectionTopol) {
+        registry.fill(HIST("hPtVsYRecSigRecoTopol"), ptRec, yRec);
       }
-      //Initialize D0/D0bar mass
-      float massD0{0.f}, massD0bar{0.f};
-      //If using KfParticle RecoType, get mass from that 
-      if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
-        massD0 = candidate.kfGeoMassD0();
-        massD0bar = candidate.kfGeoMassD0bar();
-      //If using DCAFitterN, get mass from candidate using HfHelper
-      } else {
-        massD0 = HfHelper::invMassD0ToPiK(candidate);
-        massD0bar = HfHelper::invMassD0barToKPi(candidate);
+      //If candidate passes Candidate/hypothesis selection, fill histogram
+      if (candidate.isRecoCand() >= selectionCand) {
+        registry.fill(HIST("hPtVsYRecSigRecoCand"), ptRec, yRec);
       }
-      auto trackPos = candidate.template prong0_as<TracksSelQuality>(); // positive daughter
-      auto trackNeg = candidate.template prong1_as<TracksSelQuality>(); // negative daughter
-      //Check if reconstructed candidate is actual D0->piK using MC truth info
-      if (std::abs(candidate.flagMcMatchRec()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
-        // Get the corresponding MC particle.
-        auto indexMother = RecoDecay::getMother(mcParticles, trackPos.template mcParticle_as<soa::Join<aod::McParticles, aod::HfCand2ProngMcGen>>(), o2::constants::physics::Pdg::kD0, true);
-        auto particleMother = mcParticles.rawIteratorAt(indexMother);
-        auto ptGen = particleMother.pt();                                                   // gen. level pT
-        auto yGen = RecoDecay::y(particleMother.pVector(), o2::constants::physics::MassD0); // gen. level y
-        registry.fill(HIST("hPtGenSig"), ptGen);                                            // gen. level pT
-        auto ptRec = candidate.pt();
-        auto yRec = HfHelper::yD0(candidate);
-        //Checks if reconstructed particle satisfied HF flag
+      //If candidate passes Particle-ID selection, fill histogram 
+      if (candidate.isRecoPid() >= selectionPid) {
+        registry.fill(HIST("hPtVsYRecSig_RecoPID"), ptRec, yRec);
+      }
+      //If particle passes D0 or D0bar hyptohesis, fill histograms
+      if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
+        registry.fill(HIST("hPtVsYRecSigReco"), ptRec, yRec); // rec. level pT
+        registry.fill(HIST("hPtRecSig"), ptRec); // rec. level pT spectrum
+      }
+      //Check if candidate is prompt
+      if (candidate.originMcRec() == RecoDecay::OriginType::Prompt) {
+        //If candidate passes HF reconstruction selection, fill histogram
         if (candidate.isRecoHfFlag() >= selectionFlagHf) {
-          //Fills generated vs reconstructed obsverables histograms
-          registry.fill(HIST("hPtVsYRecSigRecoHFFlag"), ptRec, yRec);
-          registry.fill(HIST("hPtGenVsPtRecSig"), ptGen, ptRec);
-          registry.fill(HIST("hYGenVsYRecSig"), yGen, yRec);
-          if (candidate.isSelD0() >= selectionFlagD0) {
-            //If candidate satisfies D0 hypothesis, fill 3d histogram
-            registry.fill(HIST("hMassVsPtGenVsPtRecSig"), massD0, ptGen, ptRec);
-          }
-          //If candidate satisfies D0bar hypothesis, fill 3d histogram
-          if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hMassVsPtGenVsPtRecSig"), massD0bar, ptGen, ptRec);
-          }
+          registry.fill(HIST("hPtVsYRecSigPromptRecoHFFlag"), ptRec, yRec);
         }
         //If candidate passes Topolofical Selection, fill histogram
         if (candidate.isRecoTopol() >= selectionTopol) {
-          registry.fill(HIST("hPtVsYRecSigRecoTopol"), ptRec, yRec);
+          registry.fill(HIST("hPtVsYRecSigPromptRecoTopol"), ptRec, yRec);
         }
         //If candidate passes Candidate/hypothesis selection, fill histogram
         if (candidate.isRecoCand() >= selectionCand) {
-          registry.fill(HIST("hPtVsYRecSigRecoCand"), ptRec, yRec);
+          registry.fill(HIST("hPtVsYRecSigPromptRecoCand"), ptRec, yRec);
         }
         //If candidate passes Particle-ID selection, fill histogram 
         if (candidate.isRecoPid() >= selectionPid) {
-          registry.fill(HIST("hPtVsYRecSig_RecoPID"), ptRec, yRec);
+          registry.fill(HIST("hPtVsYRecSigPromptRecoPID"), ptRec, yRec);
         }
-        //If particle passes D0 or D0bar hyptohesis, fill histograms
+        //If particle satisfies D0 or D0bar hypothesis, fill histograms
         if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
-          registry.fill(HIST("hPtVsYRecSigReco"), ptRec, yRec); // rec. level pT
-          registry.fill(HIST("hPtRecSig"), ptRec); // rec. level pT spectrum
+          registry.fill(HIST("hPtVsYRecSigPromptReco"), ptRec, yRec); // rec. level pT, prompt
+          registry.fill(HIST("hPtRecSigPrompt"), ptRec); //rec. level prompt pT spectrum
         }
-        //Check if candidate is prompt
-        if (candidate.originMcRec() == RecoDecay::OriginType::Prompt) {
-          //If candidate passes HF reconstruction selection, fill histogram
-          if (candidate.isRecoHfFlag() >= selectionFlagHf) {
-            registry.fill(HIST("hPtVsYRecSigPromptRecoHFFlag"), ptRec, yRec);
-          }
-          //If candidate passes Topolofical Selection, fill histogram
-          if (candidate.isRecoTopol() >= selectionTopol) {
-            registry.fill(HIST("hPtVsYRecSigPromptRecoTopol"), ptRec, yRec);
-          }
-          //If candidate passes Candidate/hypothesis selection, fill histogram
-          if (candidate.isRecoCand() >= selectionCand) {
-            registry.fill(HIST("hPtVsYRecSigPromptRecoCand"), ptRec, yRec);
-          }
-          //If candidate passes Particle-ID selection, fill histogram 
-          if (candidate.isRecoPid() >= selectionPid) {
-            registry.fill(HIST("hPtVsYRecSigPromptRecoPID"), ptRec, yRec);
-          }
-          //If particle satisfies D0 or D0bar hypothesis, fill histograms
-          if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hPtVsYRecSigPromptReco"), ptRec, yRec); // rec. level pT, prompt
-            registry.fill(HIST("hPtRecSigPrompt"), ptRec); //rec. level prompt pT spectrum
-          }
-        //Same as everything in preceding if-statement, but for non-prompt
-        } else {
-          if (candidate.isRecoHfFlag() >= selectionFlagHf) {
-            registry.fill(HIST("hPtVsYRecSigNonPromptRecoHFFlag"), ptRec, yRec);
-          }
-          if (candidate.isRecoTopol() >= selectionTopol) {
-            registry.fill(HIST("hPtVsYRecSigNonPromptRecoTopol"), ptRec, yRec);
-          }
-          if (candidate.isRecoCand() >= selectionCand) {
-            registry.fill(HIST("hPtVsYRecSigNonPromptRecoCand"), ptRec, yRec);
-          }
-          if (candidate.isRecoPid() >= selectionPid) {
-            registry.fill(HIST("hPtVsYRecSigNonPromptRecoPID"), ptRec, yRec);
-          }
-          if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
-            registry.fill(HIST("hPtVsYRecSigNonPromptReco"), ptRec, yRec); // rec. level pT, non-prompt
-            registry.fill(HIST("hPtRecSigNonPrompt"), ptRec);
-          }
+      //Same as everything in preceding if-statement, but for non-prompt
+      } else {
+        if (candidate.isRecoHfFlag() >= selectionFlagHf) {
+          registry.fill(HIST("hPtVsYRecSigNonPromptRecoHFFlag"), ptRec, yRec);
         }
-        //Fill reconstructed CPA and Eta signal
-        registry.fill(HIST("hCPARecSig"), candidate.cpa());
-        registry.fill(HIST("hEtaRecSig"), candidate.eta());
-      } 
-      //If not checked a true D0->piK, fill as background
-      else { 
-        registry.fill(HIST("hPtRecBg"), candidate.pt());
-        registry.fill(HIST("hCPARecBg"), candidate.cpa());
-        registry.fill(HIST("hEtaRecBg"), candidate.eta());
+        if (candidate.isRecoTopol() >= selectionTopol) {
+          registry.fill(HIST("hPtVsYRecSigNonPromptRecoTopol"), ptRec, yRec);
+        }
+        if (candidate.isRecoCand() >= selectionCand) {
+          registry.fill(HIST("hPtVsYRecSigNonPromptRecoCand"), ptRec, yRec);
+        }
+        if (candidate.isRecoPid() >= selectionPid) {
+          registry.fill(HIST("hPtVsYRecSigNonPromptRecoPID"), ptRec, yRec);
+        }
+        if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
+          registry.fill(HIST("hPtVsYRecSigNonPromptReco"), ptRec, yRec); // rec. level pT, non-prompt
+          registry.fill(HIST("hPtRecSigNonPrompt"), ptRec);
+        }
       }
-      //Initialize observables to fill into histograms
-      auto ptCandidate = candidate.pt(); //rec. candidate pT
-      auto ptProng0 = candidate.ptProng0(); //rec. candidate pT prong0
-      auto ptProng1 = candidate.ptProng1(); //rec. candidate pT prong1
-      auto rapidityCandidate = HfHelper::yD0(candidate); // rec. candidate rapidity
-      auto declengthCandidate = candidate.decayLength(); // rec. candidate decay length
-      auto declengthxyCandidate = candidate.decayLengthXY(); // rec. candidate transverse decay length
-      auto normaliseddeclengthCandidate = candidate.decayLengthNormalised(); // rec. candidate normalized decay length
-      auto normaliseddeclengthxyCandidate = candidate.decayLengthXYNormalised(); // rec. candidate normalized transverse decay length
-      auto d0Prong0 = candidate.impactParameter0(); // rec. impact parameter prong0
-      auto d0Prong1 = candidate.impactParameter1(); // rec. impact parameter prong1
-      auto d0d0Candidate = candidate.impactParameterProduct(); // rec. product of impact parameters
-      auto ctsCandidate = HfHelper::cosThetaStarD0(candidate); // rec. candidate Cos theta*
-      auto ctCandidate = HfHelper::ctD0(candidate); // rec. candidate lifetime * c
-      auto cpaCandidate = candidate.cpa(); // rec. candidate Cos of pointing angle
-      auto cpaxyCandidate = candidate.cpaXY(); // rec. candidate Cos of pointing angle in transverse plane
-      
-      //Whichever prong has less clusters in ITS, take that value
-      int const minItsClustersOfProngs = std::min(trackPos.itsNCls(), trackNeg.itsNCls()); 
-      //Whichever prong hass less crossed rows in TPC, take that value
-      int const minTpcCrossedRowsOfProngs = std::min(trackPos.tpcNClsCrossedRows(), trackNeg.tpcNClsCrossedRows());
+      //Fill reconstructed CPA and Eta signal
+      registry.fill(HIST("hCPARecSig"), candidate.cpa());
+      registry.fill(HIST("hEtaRecSig"), candidate.eta());
+    } 
+    //If not checked a true D0->piK, fill as background
+    else { 
+      registry.fill(HIST("hPtRecBg"), candidate.pt());
+      registry.fill(HIST("hCPARecBg"), candidate.cpa());
+      registry.fill(HIST("hEtaRecBg"), candidate.eta());
+    }
+    //Initialize observables to fill into histograms
+    auto ptCandidate = candidate.pt(); //rec. candidate pT
+    auto ptProng0 = candidate.ptProng0(); //rec. candidate pT prong0
+    auto ptProng1 = candidate.ptProng1(); //rec. candidate pT prong1
+    auto rapidityCandidate = HfHelper::yD0(candidate); // rec. candidate rapidity
+    auto declengthCandidate = candidate.decayLength(); // rec. candidate decay length
+    auto declengthxyCandidate = candidate.decayLengthXY(); // rec. candidate transverse decay length
+    auto normaliseddeclengthCandidate = candidate.decayLengthNormalised(); // rec. candidate normalized decay length
+    auto normaliseddeclengthxyCandidate = candidate.decayLengthXYNormalised(); // rec. candidate normalized transverse decay length
+    auto d0Prong0 = candidate.impactParameter0(); // rec. impact parameter prong0
+    auto d0Prong1 = candidate.impactParameter1(); // rec. impact parameter prong1
+    auto d0d0Candidate = candidate.impactParameterProduct(); // rec. product of impact parameters
+    auto ctsCandidate = HfHelper::cosThetaStarD0(candidate); // rec. candidate Cos theta*
+    auto ctCandidate = HfHelper::ctD0(candidate); // rec. candidate lifetime * c
+    auto cpaCandidate = candidate.cpa(); // rec. candidate Cos of pointing angle
+    auto cpaxyCandidate = candidate.cpaXY(); // rec. candidate Cos of pointing angle in transverse plane
 
-      //If candidate pass D0 hypothesis, fill histograms
-      if (candidate.isSelD0() >= selectionFlagD0) {
-        //Combines signal and background
-        registry.fill(HIST("hMassSigBkgD0"), massD0, ptCandidate, rapidityCandidate);
-        //Truth match, if candidate really is D0->piK, fill histograms
-        if (candidate.flagMcMatchRec() == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
-          registry.fill(HIST("hPtProng0Sig"), ptProng0, rapidityCandidate);
-          registry.fill(HIST("hPtProng1Sig"), ptProng1, rapidityCandidate);
-          registry.fill(HIST("hDecLengthSig"), declengthCandidate, rapidityCandidate);
-          registry.fill(HIST("hDecLengthXYSig"), declengthxyCandidate, rapidityCandidate);
-          registry.fill(HIST("hNormalisedDecLengthSig"), normaliseddeclengthCandidate, rapidityCandidate);
-          registry.fill(HIST("hNormalisedDecLengthXYSig"), normaliseddeclengthxyCandidate, rapidityCandidate);
-          registry.fill(HIST("hd0Prong0Sig"), d0Prong0, rapidityCandidate);
-          registry.fill(HIST("hd0Prong1Sig"), d0Prong1, rapidityCandidate);
-          registry.fill(HIST("hd0d0Sig"), d0d0Candidate, rapidityCandidate);
-          registry.fill(HIST("hCTSSig"), ctsCandidate, rapidityCandidate);
-          registry.fill(HIST("hCtSig"), ctCandidate, rapidityCandidate);
-          registry.fill(HIST("hCPASig"), cpaCandidate, rapidityCandidate);
-          registry.fill(HIST("hCPAxySig"), cpaxyCandidate, rapidityCandidate);
-          registry.fill(HIST("hd0Prong0VsPtSig"), d0Prong0, ptCandidate);
-          registry.fill(HIST("hd0Prong1VsPtSig"), d0Prong1, ptCandidate);
-          registry.fill(HIST("hd0d0VsPtSig"), d0d0Candidate, ptCandidate);
-          registry.fill(HIST("hCTSVsPtSig"), ctsCandidate, ptCandidate);
-          registry.fill(HIST("hCPAVsPtSig"), cpaCandidate, ptCandidate);
-          registry.fill(HIST("hCPAXYVsPtSig"), cpaxyCandidate, ptCandidate);
-          registry.fill(HIST("hNormalisedDecLengthxyVsPtSig"), normaliseddeclengthxyCandidate, ptCandidate);
-          registry.fill(HIST("hDecLengthVsPtSig"), declengthCandidate, ptCandidate);
-          registry.fill(HIST("hDecLengthxyVsPtSig"), declengthxyCandidate, ptCandidate);
-          registry.fill(HIST("hMassSigD0"), massD0, ptCandidate, rapidityCandidate);
-          
-          //Fill histograms if ML is active
-          if constexpr (ApplyMl) {
-            if (storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
-            } else if (storeCentrality && !storeOccupancyAndIR) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
-            } else if (!storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
-            } else if (storeTrackQuality) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-            } else {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
-            }
+    //Whichever prong has less clusters in ITS, take that value
+    int const minItsClustersOfProngs = std::min(trackPos.itsNCls(), trackNeg.itsNCls()); 
+    //Whichever prong hass less crossed rows in TPC, take that value
+    int const minTpcCrossedRowsOfProngs = std::min(trackPos.tpcNClsCrossedRows(), trackNeg.tpcNClsCrossedRows());
+
+    //If candidate pass D0 hypothesis, fill histograms
+    if (candidate.isSelD0() >= selectionFlagD0) {
+      //Combines signal and background
+      registry.fill(HIST("hMassSigBkgD0"), massD0, ptCandidate, rapidityCandidate);
+      //Truth match, if candidate really is D0->piK, fill histograms
+      if (candidate.flagMcMatchRec() == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
+        registry.fill(HIST("hPtProng0Sig"), ptProng0, rapidityCandidate);
+        registry.fill(HIST("hPtProng1Sig"), ptProng1, rapidityCandidate);
+        registry.fill(HIST("hDecLengthSig"), declengthCandidate, rapidityCandidate);
+        registry.fill(HIST("hDecLengthXYSig"), declengthxyCandidate, rapidityCandidate);
+        registry.fill(HIST("hNormalisedDecLengthSig"), normaliseddeclengthCandidate, rapidityCandidate);
+        registry.fill(HIST("hNormalisedDecLengthXYSig"), normaliseddeclengthxyCandidate, rapidityCandidate);
+        registry.fill(HIST("hd0Prong0Sig"), d0Prong0, rapidityCandidate);
+        registry.fill(HIST("hd0Prong1Sig"), d0Prong1, rapidityCandidate);
+        registry.fill(HIST("hd0d0Sig"), d0d0Candidate, rapidityCandidate);
+        registry.fill(HIST("hCTSSig"), ctsCandidate, rapidityCandidate);
+        registry.fill(HIST("hCtSig"), ctCandidate, rapidityCandidate);
+        registry.fill(HIST("hCPASig"), cpaCandidate, rapidityCandidate);
+        registry.fill(HIST("hCPAxySig"), cpaxyCandidate, rapidityCandidate);
+        registry.fill(HIST("hd0Prong0VsPtSig"), d0Prong0, ptCandidate);
+        registry.fill(HIST("hd0Prong1VsPtSig"), d0Prong1, ptCandidate);
+        registry.fill(HIST("hd0d0VsPtSig"), d0d0Candidate, ptCandidate);
+        registry.fill(HIST("hCTSVsPtSig"), ctsCandidate, ptCandidate);
+        registry.fill(HIST("hCPAVsPtSig"), cpaCandidate, ptCandidate);
+        registry.fill(HIST("hCPAXYVsPtSig"), cpaxyCandidate, ptCandidate);
+        registry.fill(HIST("hNormalisedDecLengthxyVsPtSig"), normaliseddeclengthxyCandidate, ptCandidate);
+        registry.fill(HIST("hDecLengthVsPtSig"), declengthCandidate, ptCandidate);
+        registry.fill(HIST("hDecLengthxyVsPtSig"), declengthxyCandidate, ptCandidate);
+        registry.fill(HIST("hMassSigD0"), massD0, ptCandidate, rapidityCandidate);
+
+        //Fill histograms if ML is active
+        if constexpr (ApplyMl) {
+          if (storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+          } else if (storeCentrality && !storeOccupancyAndIR) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+          } else if (!storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
+          } else if (storeTrackQuality) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
           } else {
-            if (storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
-            } else if (storeCentrality && !storeOccupancyAndIR) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
-            } else if (!storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
-            } else if (storeTrackQuality) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-            } else {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
-            }
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
           }
-        } 
-        //If not truth matched as real D0->piK, fill background histograms
-        else {
-          registry.fill(HIST("hPtProng0Bkg"), ptProng0, rapidityCandidate);
-          registry.fill(HIST("hPtProng1Bkg"), ptProng1, rapidityCandidate);
-          registry.fill(HIST("hDecLengthBkg"), declengthCandidate, rapidityCandidate);
-          registry.fill(HIST("hDecLengthXYBkg"), declengthxyCandidate, rapidityCandidate);
-          registry.fill(HIST("hNormalisedDecLengthBkg"), normaliseddeclengthCandidate, rapidityCandidate);
-          registry.fill(HIST("hNormalisedDecLengthXYBkg"), normaliseddeclengthxyCandidate, rapidityCandidate);
-          registry.fill(HIST("hd0Prong0Bkg"), d0Prong0, rapidityCandidate);
-          registry.fill(HIST("hd0Prong1Bkg"), d0Prong1, rapidityCandidate);
-          registry.fill(HIST("hd0d0Bkg"), d0d0Candidate, rapidityCandidate);
-          registry.fill(HIST("hCTSBkg"), ctsCandidate, rapidityCandidate);
-          registry.fill(HIST("hCtBkg"), ctCandidate, rapidityCandidate);
-          registry.fill(HIST("hCPABkg"), cpaCandidate, rapidityCandidate);
-          registry.fill(HIST("hCPAxyBkg"), cpaxyCandidate, rapidityCandidate);
-          registry.fill(HIST("hMassBkgD0"), massD0, ptCandidate, rapidityCandidate);
-          //Checks if candidate is truth matched to D0bar, if so = reflection background
-          if (candidate.flagMcMatchRec() == -o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
-            registry.fill(HIST("hMassReflBkgD0"), massD0, ptCandidate, rapidityCandidate);
-            if constexpr (ApplyMl) {
-              if (storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
-              } else if (storeCentrality && !storeOccupancyAndIR) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
-              } else if (!storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
-              } else if (storeTrackQuality) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-              } else {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
-              }
-            } else {
-              if (storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
-              } else if (storeCentrality && !storeOccupancyAndIR) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
-              } else if (!storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
-              } else if (storeTrackQuality) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-              } else {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
-              }
-            }
+        } else {
+          if (storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+          } else if (storeCentrality && !storeOccupancyAndIR) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+          } else if (!storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
+          } else if (storeTrackQuality) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+          } else {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, SigD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
           }
         }
-      }
-      //Fill histograms for D0bar hypothesis candidates
-      if (candidate.isSelD0bar() >= selectionFlagD0bar) {
-        registry.fill(HIST("hMassSigBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
+      } 
+      //If not truth matched as real D0->piK, fill background histograms
+      else {
+        registry.fill(HIST("hPtProng0Bkg"), ptProng0, rapidityCandidate);
+        registry.fill(HIST("hPtProng1Bkg"), ptProng1, rapidityCandidate);
+        registry.fill(HIST("hDecLengthBkg"), declengthCandidate, rapidityCandidate);
+        registry.fill(HIST("hDecLengthXYBkg"), declengthxyCandidate, rapidityCandidate);
+        registry.fill(HIST("hNormalisedDecLengthBkg"), normaliseddeclengthCandidate, rapidityCandidate);
+        registry.fill(HIST("hNormalisedDecLengthXYBkg"), normaliseddeclengthxyCandidate, rapidityCandidate);
+        registry.fill(HIST("hd0Prong0Bkg"), d0Prong0, rapidityCandidate);
+        registry.fill(HIST("hd0Prong1Bkg"), d0Prong1, rapidityCandidate);
+        registry.fill(HIST("hd0d0Bkg"), d0d0Candidate, rapidityCandidate);
+        registry.fill(HIST("hCTSBkg"), ctsCandidate, rapidityCandidate);
+        registry.fill(HIST("hCtBkg"), ctCandidate, rapidityCandidate);
+        registry.fill(HIST("hCPABkg"), cpaCandidate, rapidityCandidate);
+        registry.fill(HIST("hCPAxyBkg"), cpaxyCandidate, rapidityCandidate);
+        registry.fill(HIST("hMassBkgD0"), massD0, ptCandidate, rapidityCandidate);
+        //Checks if candidate is truth matched to D0bar, if so = reflection background
         if (candidate.flagMcMatchRec() == -o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
-          registry.fill(HIST("hMassSigD0bar"), massD0bar, ptCandidate, rapidityCandidate);
+          registry.fill(HIST("hMassReflBkgD0"), massD0, ptCandidate, rapidityCandidate);
           if constexpr (ApplyMl) {
             if (storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
             } else if (storeCentrality && !storeOccupancyAndIR) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
             } else if (!storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
             } else if (storeTrackQuality) {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
             } else {
-              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec());
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0()[0], candidate.mlProbD0()[1], candidate.mlProbD0()[2], massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
             }
           } else {
             if (storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
             } else if (storeCentrality && !storeOccupancyAndIR) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
             } else if (!storeCentrality && storeOccupancyAndIR) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
             } else if (storeTrackQuality) {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
             } else {
-              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec());
-            }
-          }
-        } 
-        //Fills background for D0bar
-        else {
-          registry.fill(HIST("hMassBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
-          if (candidate.flagMcMatchRec() == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
-            registry.fill(HIST("hMassReflBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
-            if constexpr (ApplyMl) {
-              if (storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
-              } else if (storeCentrality && !storeOccupancyAndIR) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
-              } else if (!storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), numPvContributors, occ, ir);
-              } else if (storeTrackQuality) {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), numPvContributors, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-              } else {
-                registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), numPvContributors);
-              }
-            } else {
-              if (storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
-              } else if (storeCentrality && !storeOccupancyAndIR) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
-              } else if (!storeCentrality && storeOccupancyAndIR) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
-              } else if (storeTrackQuality) {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
-              } else {
-                registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec());
-              }
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0, ptCandidate, rapidityCandidate, ReflectedD0, candidate.ptBhadMotherPart(), candidate.originMcRec());
             }
           }
         }
       }
     }
+    //Fill histograms for D0bar hypothesis candidates
+    if (candidate.isSelD0bar() >= selectionFlagD0bar) {
+      registry.fill(HIST("hMassSigBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
+      if (candidate.flagMcMatchRec() == -o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
+        registry.fill(HIST("hMassSigD0bar"), massD0bar, ptCandidate, rapidityCandidate);
+        if constexpr (ApplyMl) {
+          if (storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+          } else if (storeCentrality && !storeOccupancyAndIR) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+          } else if (!storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
+          } else if (storeTrackQuality) {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+          } else {
+            registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec());
+          }
+        } else {
+          if (storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+          } else if (storeCentrality && !storeOccupancyAndIR) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+          } else if (!storeCentrality && storeOccupancyAndIR) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
+          } else if (storeTrackQuality) {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+          } else {
+            registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, SigD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec());
+          }
+        }
+      } 
+      //Fills background for D0bar
+      else {
+        registry.fill(HIST("hMassBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
+        if (candidate.flagMcMatchRec() == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
+          registry.fill(HIST("hMassReflBkgD0bar"), massD0bar, ptCandidate, rapidityCandidate);
+          if constexpr (ApplyMl) {
+            if (storeCentrality && storeOccupancyAndIR) {
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+            } else if (storeCentrality && !storeOccupancyAndIR) {
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+            } else if (!storeCentrality && storeOccupancyAndIR) {
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), numPvContributors, occ, ir);
+            } else if (storeTrackQuality) {
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), numPvContributors, minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+            } else {
+              registry.fill(HIST("hBdtScoreVsMassVsPtVsPtBVsYVsOriginVsD0Type"), candidate.mlProbD0bar()[0], candidate.mlProbD0bar()[1], candidate.mlProbD0bar()[2], massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), numPvContributors);
+            }
+          } else {
+            if (storeCentrality && storeOccupancyAndIR) {
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors, occ, ir);
+            } else if (storeCentrality && !storeOccupancyAndIR) {
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), cent, numPvContributors);
+            } else if (!storeCentrality && storeOccupancyAndIR) {
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), occ, ir);
+            } else if (storeTrackQuality) {
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec(), minItsClustersOfProngs, minTpcCrossedRowsOfProngs);
+            } else {
+              registry.fill(HIST("hMassVsPtVsPtBVsYVsOriginVsD0Type"), massD0bar, ptCandidate, rapidityCandidate, ReflectedD0bar, candidate.ptBhadMotherPart(), candidate.originMcRec());
+            }
+          }
+        }
+      }
+    }
+  }
+
+  template <typename CollType, typename BCsType>
+  std::unordered_map<int64_t, int> buildD0RecoEventStatus(CollType const& collisions)
+  {
     // Classify reco associations once per collision, not once per generated particle.
     // The task's hfEvSel.* configuration must match the candidate creator's cuts.
     std::unordered_map<int64_t, int> recoEventStatus;
@@ -1380,115 +1478,143 @@ struct HfTaskD0 {
         status = std::max(status, currentStatus);
       }
     }
+    return recoEventStatus;
+  }
 
-    // MC gen. Each particle is filled once, even for split or unreconstructed events.
-    // Upstream event rejection can clear flagMcMatchGen: this is not an unfiltered truth sample.
-    // Loop over true (MC truth info) particles
-    for (const auto& particle : mcParticles) {
-      //Check if generated particle matches D0->piK decay
-      if (std::abs(particle.flagMcMatchGen()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
-        //Rapidity cut
-        if (yCandGenMax >= 0. && std::abs(RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0)) > yCandGenMax) {
-          continue;
-        }
-        
-        float ptGenB = -1; //Beauty mother pT initialized, default = -1, because prompt have no beauty mother
-        auto ptGen = particle.pt(); //Gen. level pT
-        auto yGen = RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0); //gen. level rapidity
-        registry.fill(HIST("hPtGen"), ptGen);
-        registry.fill(HIST("hPtVsYGen"), ptGen, yGen);
-
-        //Initializes NoRecoCollision = 0
-        int eventStatus = NoRecoCollision;
-
-        //Initialized maximum number of contributions, cannot be negative
-        unsigned maxNumContrib = 0;
-
-        //Initialize centrality and occupancy, default = -1, for if not used
-        float cent{-1.f};
-        float occ{-1.f};
-        //If collision table includes reconstructed centrality info, enter if statement
-        if constexpr (std::is_same_v<CollType, CollisionsWithMcLabelsCent>) {
-          //Group generated collision by collision ID
-          const auto& recoCollsPerMcCollCent = collisions.sliceBy(colPerMcCollisionCent, particle.mcCollisionId());
-          //Loop through reconstructed collision
-          for (const auto& recCol : recoCollsPerMcCollCent) {
-            //Whichever is bigger, take as maxNumContrib
-            maxNumContrib = recCol.numContrib() > maxNumContrib ? recCol.numContrib() : maxNumContrib;
-          }
-          //If Centrality, Occupancy, IR storage and estimators are active, get info
-          if (storeCentrality && centEstimator != CentralityEstimator::None) {
-            cent = getCentralityGenColl(recoCollsPerMcCollCent, centEstimator);
-          }
-          if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
-            occ = o2::hf_occupancy::getOccupancyGenColl(recoCollsPerMcCollCent, occEstimator);
-          }
-        } 
-        //If there are no centrality columns: same as above, but without cent, occ, IR.
-        else {
-          //Group generated collision by collision ID
-          const auto& recoCollsPerMcColl = collisions.sliceBy(colPerMcCollision, particle.mcCollisionId());
-          //Loop through reconstructed collisions
-          for (const auto& recCol : recoCollsPerMcColl) {
-            maxNumContrib = recCol.numContrib() > maxNumContrib ? recCol.numContrib() : maxNumContrib;
-          }
-        }
-
-        if (fillEventStatus) {
-          //Get collision of current MC particle, with gen. level centrality quantities
-          const auto mcCollision = particle.template mcCollision_as<McCollisionsWithCentrality>();
-          const auto eventEntry = recoEventStatus.find(mcCollision.globalIndex());
-          //eventstatus takes actual even status from reco event, or NoRecoCollision if there is none
-          eventStatus = eventEntry == recoEventStatus.end() ? NoRecoCollision : eventEntry->second;
-          // Replace the existing centrality coordinate, including zero-reco events.
-          cent = centEstimator == CentralityEstimator::FT0C ? mcCollision.centFT0C() : mcCollision.centFT0M();
-        }
-        //Lambda function: fills Sparse THN based on if fillEventStatus is true or false
-        const auto fillGeneratedSparse = [&](auto... coordinates) {
-          if (fillEventStatus) {
-            registry.fill(HIST("hSparseAcc"), coordinates..., eventStatus);
-          } else {
-            registry.fill(HIST("hSparseAcc"), coordinates...);
-          }
-        };
-
-        //Enters if statement if generated particle is prompt
-        if (particle.originMcGen() == RecoDecay::OriginType::Prompt) {
-          registry.fill(HIST("hPtGenPrompt"), ptGen);
-          registry.fill(HIST("hYGenPrompt"), yGen);
-          registry.fill(HIST("hPtVsYGenPrompt"), ptGen, yGen);
-          //If cent, Occ, IR is stored, fill sparse histogram
-          if (storeCentrality && storeOccupancyAndIR) {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib, cent, occ);
-          } else if (storeCentrality && !storeOccupancyAndIR) {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib, cent);
-          } else if (!storeCentrality && storeOccupancyAndIR) {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib, occ);
-          } else {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib);
-          }
-        } 
-        //Do the same if generated particle is non-prompt
-        else {
-          //Save also pT of non-prompts beauty mother
-          ptGenB = mcParticles.rawIteratorAt(particle.idxBhadMotherPart()).pt();
-          registry.fill(HIST("hPtGenNonPrompt"), ptGen);
-          registry.fill(HIST("hYGenNonPrompt"), yGen);
-          registry.fill(HIST("hPtVsYGenNonPrompt"), ptGen, yGen);
-          if (storeCentrality && storeOccupancyAndIR) {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib, cent, occ);
-          } else if (storeCentrality && !storeOccupancyAndIR) {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib, cent);
-          } else if (!storeCentrality && storeOccupancyAndIR) {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib, occ);
-          } else {
-            fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib);
-          }
-        }
-        //Fill Eta histogram for generated level D0
-        registry.fill(HIST("hEtaGen"), particle.eta());
+  // Generated D0 filling is separate so split reconstructed collisions do
+  // not cause a generated particle to be counted more than once.
+  template <typename CollType, typename ParticleType>
+  void fillD0HistogramsMcGen(ParticleType const& particle,
+                           soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
+                           CollType const& collisions,
+                           std::unordered_map<int64_t, int> const& recoEventStatus)
+  {
+    //Check if generated particle matches D0->piK decay
+    if (std::abs(particle.flagMcMatchGen()) == o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK) {
+      //Rapidity cut
+      if (yCandGenMax >= 0. && std::abs(RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0)) > yCandGenMax) {
+        return;
       }
+
+      float ptGenB = -1; //Beauty mother pT initialized, default = -1, because prompt have no beauty mother
+      auto ptGen = particle.pt(); //Gen. level pT
+      auto yGen = RecoDecay::y(particle.pVector(), o2::constants::physics::MassD0); //gen. level rapidity
+      registry.fill(HIST("hPtGen"), ptGen);
+      registry.fill(HIST("hPtVsYGen"), ptGen, yGen);
+
+      //Initializes NoRecoCollision = 0
+      int eventStatus = NoRecoCollision;
+
+      //Initialized maximum number of contributions, cannot be negative
+      unsigned maxNumContrib = 0;
+
+      //Initialize centrality and occupancy, default = -1, for if not used
+      float cent{-1.f};
+      float occ{-1.f};
+      //If collision table includes reconstructed centrality info, enter if statement
+      if constexpr (std::is_same_v<CollType, CollisionsWithMcLabelsCent>) {
+        //Group generated collision by collision ID
+        const auto& recoCollsPerMcCollCent = collisions.sliceBy(colPerMcCollisionCent, particle.mcCollisionId());
+        //Loop through reconstructed collision
+        for (const auto& recCol : recoCollsPerMcCollCent) {
+          //Whichever is bigger, take as maxNumContrib
+          maxNumContrib = recCol.numContrib() > maxNumContrib ? recCol.numContrib() : maxNumContrib;
+        }
+        //If Centrality, Occupancy, IR storage and estimators are active, get info
+        if (storeCentrality && centEstimator != CentralityEstimator::None) {
+          cent = getCentralityGenColl(recoCollsPerMcCollCent, centEstimator);
+        }
+        if (storeOccupancyAndIR && occEstimator != OccupancyEstimator::None) {
+          occ = o2::hf_occupancy::getOccupancyGenColl(recoCollsPerMcCollCent, occEstimator);
+        }
+      } 
+      //If there are no centrality columns: same as above, but without cent, occ, IR.
+      else {
+        //Group generated collision by collision ID
+        const auto& recoCollsPerMcColl = collisions.sliceBy(colPerMcCollision, particle.mcCollisionId());
+        //Loop through reconstructed collisions
+        for (const auto& recCol : recoCollsPerMcColl) {
+          maxNumContrib = recCol.numContrib() > maxNumContrib ? recCol.numContrib() : maxNumContrib;
+        }
+      }
+
+      if (fillEventStatus) {
+        //Get collision of current MC particle, with gen. level centrality quantities
+        const auto mcCollision = particle.template mcCollision_as<McCollisionsWithCentrality>();
+        const auto eventEntry = recoEventStatus.find(mcCollision.globalIndex());
+        //eventstatus takes actual even status from reco event, or NoRecoCollision if there is none
+        eventStatus = eventEntry == recoEventStatus.end() ? NoRecoCollision : eventEntry->second;
+        // Replace the existing centrality coordinate, including zero-reco events.
+        cent = centEstimator == CentralityEstimator::FT0C ? mcCollision.centFT0C() : mcCollision.centFT0M();
+      }
+      //Lambda function: fills Sparse THN based on if fillEventStatus is true or false
+      const auto fillGeneratedSparse = [&](auto... coordinates) {
+        if (fillEventStatus) {
+          registry.fill(HIST("hSparseAcc"), coordinates..., eventStatus);
+        } else {
+          registry.fill(HIST("hSparseAcc"), coordinates...);
+        }
+      };
+
+      //Enters if statement if generated particle is prompt
+      if (particle.originMcGen() == RecoDecay::OriginType::Prompt) {
+        registry.fill(HIST("hPtGenPrompt"), ptGen);
+        registry.fill(HIST("hYGenPrompt"), yGen);
+        registry.fill(HIST("hPtVsYGenPrompt"), ptGen, yGen);
+        //If cent, Occ, IR is stored, fill sparse histogram
+        if (storeCentrality && storeOccupancyAndIR) {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib, cent, occ);
+        } else if (storeCentrality && !storeOccupancyAndIR) {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib, cent);
+        } else if (!storeCentrality && storeOccupancyAndIR) {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib, occ);
+        } else {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 1, maxNumContrib);
+        }
+      } 
+      //Do the same if generated particle is non-prompt
+      else {
+        //Save also pT of non-prompts beauty mother
+        ptGenB = mcParticles.rawIteratorAt(particle.idxBhadMotherPart()).pt();
+        registry.fill(HIST("hPtGenNonPrompt"), ptGen);
+        registry.fill(HIST("hYGenNonPrompt"), yGen);
+        registry.fill(HIST("hPtVsYGenNonPrompt"), ptGen, yGen);
+        if (storeCentrality && storeOccupancyAndIR) {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib, cent, occ);
+        } else if (storeCentrality && !storeOccupancyAndIR) {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib, cent);
+        } else if (!storeCentrality && storeOccupancyAndIR) {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib, occ);
+        } else {
+          fillGeneratedSparse(ptGen, ptGenB, yGen, 2, maxNumContrib);
+        }
+      }
+      //Fill Eta histogram for generated level D0
+      registry.fill(HIST("hEtaGen"), particle.eta());
     }
+  }
+
+  //Template function to allow this processMc to work with different configurations
+  template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
+  void processMc(CandType const& candidates,
+                 soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
+                 TracksSelQuality const&,
+                 CollType const& collisions,
+                 McCollisionsWithCentrality const&,
+                 BCsType const&)
+  {
+    for (const auto& candidate : candidates) {
+      fillD0HistogramsMcRec<ReconstructionType, ApplyMl, CollType, BCsType>(candidate, mcParticles);
+    }
+    // TODO: Add reconstructed D* inputs, then fill D* and same-collision
+    // tetraquark candidates through the McRec helpers above.
+
+    const auto recoEventStatus = buildD0RecoEventStatus<CollType, BCsType>(collisions);
+    for (const auto& particle : mcParticles) {
+      fillD0HistogramsMcGen(particle, mcParticles, collisions, recoEventStatus);
+    }
+    // TODO: Add generated D* inputs and call the McGen helpers separately
+    // from reconstructed-candidate and reconstructed-collision loops.
   }
 
   void processMcWithDCAFitterN(D0CandidatesMc const&,
