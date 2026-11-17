@@ -153,7 +153,8 @@ struct HfTaskD0 {
   // using TracksWithExtra = o2::soa::Join<o2::aod::FullTracks, o2::aod::TrackSelection>;
   Filter filterD0Flag = (o2::aod::hf_track_index::hfflag & static_cast<uint8_t>(BIT(aod::hf_cand_2prong::DecayType::D0ToPiK))) != static_cast<uint8_t>(0);
   Preslice<TracksWPid> perCol = aod::track::collisionId;
-  Preslice<aod::HfCand2Prong> candD0PerCollision = aod::hf_cand::collisionId;
+  Preslice<aod::HfCand2Prong> candD0PerCollision = aod::hf_cand::collisionId; //D0 candidate per collision
+  Preslice<aod::HfCandDstars> candDstarPerCollision = aod::hf_cand::collisionId; //D* candidate per collision
 
   PresliceUnsorted<CollisionsWithMcLabels> colPerMcCollision = aod::mccollisionlabel::mcCollisionId;
   PresliceUnsorted<CollisionsWithMcLabelsCent> colPerMcCollisionCent = aod::mccollisionlabel::mcCollisionId;
@@ -537,12 +538,49 @@ struct HfTaskD0 {
   }
 
   //Template function: Allows processData to work with different configurations
-  template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
-  void processData(CandType const& candidates,
+  template <int ReconstructionType, bool ApplyMl, typename D0CandType, typename DstarCandType, typename CollType, typename BCsType>
+  void processData(D0CandType const& D0Candidates,
+                   DstarCandType const& DstarCandidates,
                    CollType const&,
                    aod::TracksWExtra const&,
                    BCsType const&)
   {
+    for (const auto& collision : collisions) {
+
+      const auto collisionId = collision.globalIndex(); //Collision ID for the current collision
+
+      const auto d0s = d0Candidates.sliceBy(candD0PerCollision, collisionId); //Slice the D0 candidates based on the current collision ID
+      const auto dstars = dstarCandidates.sliceBy(candDstarPerCollision, collisionId); //Slice the D* candidates based on the current collision ID
+
+      //No pair is possible without both constituents
+      if (d0s.size() == 0 || dstars.size() == 0) {
+        continue;
+      }
+
+      //Check if D0 satisfies D0 -> K pi reconstuction flag.
+      for (const auto& d0: d0s) {
+        if (!(d0.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
+          continue;
+        }
+
+        const bool selectedD0 = d0.isSelD0() >= selectionFlagD0;
+        const bool selectedD0bar = d0.isSelD0bar() >= selectionFlagD0bar; 
+
+        if (!selectedD0 && !selectedD0bar) {
+          continue;
+        }
+
+        for (const auto& dstar : dstars) {
+          if (!dstar.isSelDstarToD0Pi()) {
+            continue;
+          }
+        }
+      }
+
+
+
+    }
+
     //Loop over candidates, candidate is predefined join of tables
     for (const auto& candidate : candidates) {
       //Bitmask check: if candidate not flagged as D->K pi, skip it
@@ -993,11 +1031,11 @@ struct HfTaskD0 {
     }
   }
 
-  void processDataWithDCAFitterN(D0Candidates const&, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
+  void processDataWithDCAFitterN(D0Candidates const&, DstarCandidates const& dstarCandidates, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
-    processData<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0Candidates, collisions, tracks, bcs);
+    processData<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0Candidates, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterN, "process taskD0 with DCAFitterN", true);
+  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterN, "Process reconstructed D0-D* pairs with DCAFitterN", true);
 
   void processDataWithDCAFitterNCent(D0Candidates const&, CollisionsCent const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
