@@ -617,7 +617,7 @@ struct HfTaskD0 {
 
         const auto fourVectorTcc = fourVectorD0 + fourVectorDstar; //Tcc 4 momentum
 
-        const double massTcc = fourvectorTcc.M(); //Tcc mass from 4-vector
+        const double massTcc = fourVectorTcc.M(); //Tcc mass from 4-vector
         const double ptTcc = fourVectorTcc.Pt(); //Tcc pT from 4-vector
         const double yTcc = fourVectorTcc.Rapidity(); //Tcc rapidity from 4-vector
 
@@ -1095,42 +1095,47 @@ struct HfTaskD0 {
     }
   }
 
+  // DCAFitterN, without centrality.
   void processDataWithDCAFitterN(D0Candidates const&, DstarCandidates const& dstarCandidates, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
     processData<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0Candidates, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterN, "Process reconstructed D0-D* pairs with DCAFitterN", true);
+  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterN, "Process reconstructed D0-D* pairs with DCAFitterN", false);
 
-  void processDataWithDCAFitterNCent(D0Candidates const&, CollisionsCent const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
+  // DCAFitterN, with centrality tables.
+  void processDataWithDCAFitterNCent(D0Candidates const&, DstarCandidates const& dstarCandidates, CollisionsCent const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
-    processData<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0Candidates, collisions, tracks, bcs);
+    processData<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0Candidates, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNCent, "process taskD0 with DCAFitterN and centrality", false);
+  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNCent, "Process reconstructed D0-D* pairs with DCAFitterN and centrality", true);
 
-  void processDataWithKFParticle(D0CandidatesKF const&, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
+  // KFParticle D0 reconstruction, without centrality.
+  void processDataWithKFParticle(D0CandidatesKF const&, DstarCandidates const& dstarCandidates, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
-    processData<aod::hf_cand::VertexerType::KfParticle, false>(selectedD0CandidatesKF, collisions, tracks, bcs);
+    processData<aod::hf_cand::VertexerType::KfParticle, false>(selectedD0CandidatesKF, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithKFParticle, "process taskD0 with KFParticle", false);
-  // TODO: add processKFParticleCent
+  PROCESS_SWITCH(HfTaskD0, processDataWithKFParticle, "Process reconstructed D0-D* pairs with KFParticle D0 reconstruction", false);
 
-  void processDataWithDCAFitterNMl(D0CandidatesMl const&, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
+  // DCAFitterN with D0 ML information, without centrality.
+  void processDataWithDCAFitterNMl(D0CandidatesMl const&, DstarCandidates const& dstarCandidates, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
-    processData<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMl, collisions, tracks, bcs);
+    processData<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMl, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNMl, "process taskD0 with DCAFitterN and ML selections", false);
+  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNMl, "Process reconstructed D0-D* pairs with DCAFitterN and D0 ML information", false);
 
-  void processDataWithDCAFitterNMlCent(D0CandidatesMl const&, CollisionsCent const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
+  // DCAFitterN with D0 ML information and centrality.
+  void processDataWithDCAFitterNMlCent(D0CandidatesMl const&, DstarCandidates const& dstarCandidates, CollisionsCent const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
-    processData<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMl, collisions, tracks, bcs);
+    processData<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMl, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNMlCent, "process taskD0 with DCAFitterN and ML selections and centrality", false);
+  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNMlCent, "Process reconstructed D0-D* pairs with DCAFitterN, D0 ML information and centrality", false);
 
-  void processDataWithKFParticleMl(D0CandidatesMlKF const&, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
+  // KFParticle D0 reconstruction with D0 ML information.
+  void processDataWithKFParticleMl(D0CandidatesMlKF const&, DstarCandidates const& dstarCandidates, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
-    processData<aod::hf_cand::VertexerType::KfParticle, true>(selectedD0CandidatesMlKF, collisions, tracks, bcs);
+    processData<aod::hf_cand::VertexerType::KfParticle, true>(selectedD0CandidatesMlKF, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithKFParticleMl, "process taskD0 with KFParticle and ML selections", false);
+  PROCESS_SWITCH(HfTaskD0, processDataWithKFParticleMl, "Process reconstructed D0-D* pairs with KFParticle D0 reconstruction and D0 ML information", false);
   // TODO: add processKFParticleMlCent
 
   //Template function to allow this processMc to work with different configurations

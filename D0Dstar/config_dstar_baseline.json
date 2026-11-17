@@ -23,7 +23,7 @@
     "processMcWithKFParticleMl": "false",
     "processDataWithDCAFitterNWithUpc": "false",
     "processDataWithDCAFitterNMlWithUpc": "false",
-    "processDstarInputs": "true"
+    "yTccRecoMax": "0.8"
   },
   "tof-signal": {
     "reconstructionPass": "unanchored",
