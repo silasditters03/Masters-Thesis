@@ -154,7 +154,6 @@ struct HfTaskD0 {
   Filter filterD0Flag = (o2::aod::hf_track_index::hfflag & static_cast<uint8_t>(BIT(aod::hf_cand_2prong::DecayType::D0ToPiK))) != static_cast<uint8_t>(0);
   Preslice<TracksWPid> perCol = aod::track::collisionId;
   Preslice<aod::HfCand2Prong> candD0PerCollision = aod::hf_cand::collisionId; //D0 candidate per collision
-  Preslice<aod::HfCandDstars> candDstarPerCollision = aod::hf_cand::collisionId; //D* candidate per collision
 
   PresliceUnsorted<CollisionsWithMcLabels> colPerMcCollision = aod::mccollisionlabel::mcCollisionId;
   PresliceUnsorted<CollisionsWithMcLabelsCent> colPerMcCollisionCent = aod::mccollisionlabel::mcCollisionId;
@@ -283,7 +282,7 @@ struct HfTaskD0 {
   void init(InitContext&)
   {
     std::array<bool, 14> doprocess{doprocessDataWithDCAFitterN, doprocessDataWithDCAFitterNCent, doprocessDataWithKFParticle, doprocessMcWithDCAFitterN, doprocessMcWithDCAFitterNCent, doprocessMcWithKFParticle, doprocessDataWithDCAFitterNMl, doprocessDataWithDCAFitterNMlCent, doprocessDataWithKFParticleMl, doprocessMcWithDCAFitterNMl, doprocessMcWithDCAFitterNMlCent, doprocessMcWithKFParticleMl, doprocessDataWithDCAFitterNWithUpc, doprocessDataWithDCAFitterNMlWithUpc};
-    if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0 && !doprocessDstarInputs) {
+    if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0) {
       LOGP(fatal, "At least one process function should be enabled at a time.");
     }
     if ((doprocessDataWithDCAFitterN || doprocessDataWithDCAFitterNCent || doprocessMcWithDCAFitterN || doprocessMcWithDCAFitterNCent || doprocessDataWithDCAFitterNMl || doprocessDataWithDCAFitterNMlCent || doprocessMcWithDCAFitterNMl || doprocessMcWithDCAFitterNMlCent) && (doprocessDataWithKFParticle || doprocessMcWithKFParticle || doprocessDataWithKFParticleMl || doprocessMcWithKFParticleMl)) {
@@ -539,47 +538,75 @@ struct HfTaskD0 {
 
   //Template function: Allows processData to work with different configurations
   template <int ReconstructionType, bool ApplyMl, typename D0CandType, typename DstarCandType, typename CollType, typename BCsType>
-  void processData(D0CandType const& D0Candidates,
-                   DstarCandType const& DstarCandidates,
+  void processData(D0CandType const& d0Candidates,
+                   DstarCandType const& dstarCandidates,
                    CollType const&,
                    aod::TracksWExtra const&,
                    BCsType const&)
   {
-    for (const auto& collision : collisions) {
+    //Dstar Loop, first because its rarer
+    for (const auto& dstar : dstarCandidates) {
 
-      const auto collisionId = collision.globalIndex(); //Collision ID for the current collision
-
-      const auto d0s = d0Candidates.sliceBy(candD0PerCollision, collisionId); //Slice the D0 candidates based on the current collision ID
-      const auto dstars = dstarCandidates.sliceBy(candDstarPerCollision, collisionId); //Slice the D* candidates based on the current collision ID
-
-      //No pair is possible without both constituents
-      if (d0s.size() == 0 || dstars.size() == 0) {
+      //Check if candidate is flagged as correct Dstar, if not: skip
+      if (!dstar.isSelDstarToD0Pi()) {
         continue;
       }
 
-      //Check if D0 satisfies D0 -> K pi reconstuction flag.
-      for (const auto& d0: d0s) {
-        if (!(d0.hfflag() & 1 << aod::hf_cand_2prong::DecayType::D0ToPiK)) {
+      //Check if there is a soft pion; if not: skip
+      const auto softPiSign = dstar.signSoftPi();
+      if (softPiSign == 0){
+        continue;
+      }
+
+      //Get D0 from Dstar's collision
+      const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionID);
+
+      //Loop over D0
+      for (const auto& d0 : d0s) {
+
+        //Check if D0 satisfies D0 -> K Pi flag
+        if (!(d0.hfflag() & (1 << aod::hf_cand_2prong::DecayType::D0ToPiK))) {
           continue;
         }
 
-        const bool selectedD0 = d0.isSelD0() >= selectionFlagD0;
-        const bool selectedD0bar = d0.isSelD0bar() >= selectionFlagD0bar; 
-
-        if (!selectedD0 && !selectedD0bar) {
+        //Checks if Tetraquark has right charge
+        const bool isTccPlus = softPiSign > 0 && d0.isSelD0() >= selectionFlagD0;
+        const bool isTccMinus = softPiSign < 0 && d0.isSelD0bar() >= selectionFlagD0bar;
+        if (!isTccPlus & !isTccMinus) {
           continue;
         }
 
-        for (const auto& dstar : dstars) {
-          if (!dstar.isSelDstarToD0Pi()) {
+        //Checks if no tracks overlap
+        if (d0.prong0Id() == dstar.prong0Id() ||
+          d0.prong0Id() == dstar.prong1Id() ||
+          d0.prong0Id() == dstar.prongPiId() ||
+          d0.prong1Id() == dstar.prong0Id() ||
+          d0.prong1Id() == dstar.prong1Id() ||
+          d0.prong1Id() == dstar.prongPiId()) {
             continue;
           }
-        }
+        
+
+
+
+
+
+
       }
+
+
 
 
 
     }
+
+
+
+
+
+
+
+
 
     //Loop over candidates, candidate is predefined join of tables
     for (const auto& candidate : candidates) {
