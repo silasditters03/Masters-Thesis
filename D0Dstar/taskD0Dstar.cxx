@@ -282,8 +282,12 @@ struct HfTaskD0 {
      {"hMassSigBkgD0bar", "2-prong candidates (not checked);#it{m}_{inv} (GeV/#it{c}^{2}); #it{p}_{T}; #it{y}", {HistType::kTH3F, {{120, 1.5848, 2.1848}, {150, 0., 30.}, {20, -5., 5.}}}}}};
 
   
-  void init(InitContext&)
+  void init(InitContext& ic)
   {
+    LOGP(info, "Registry: DCAFitterN={} Cent={}", ic.options().get<bool>("processDataWithDCAFitterN"), ic.options().get<bool>("processDataWithDCAFitterNCent"));
+    LOGP(info, "Members: DCAFitterN={} Cent={}", static_cast<bool>(doprocessDataWithDCAFitterN), static_cast<bool>(doprocessDataWithDCAFitterNCent));
+
+    // Keep your existing initialization below.
     LOGP(info, "Active switches: DCAFitterN={}, DCAFitterNCent={}",
      static_cast<bool>(doprocessDataWithDCAFitterN),
      static_cast<bool>(doprocessDataWithDCAFitterNCent));
@@ -1103,14 +1107,14 @@ struct HfTaskD0 {
   {
     processData<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0Candidates, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterN, "Process reconstructed D0-D* pairs with DCAFitterN", false);
+  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterN, "Process reconstructed D0-D* pairs with DCAFitterN", true);
 
   // DCAFitterN, with centrality tables.
   void processDataWithDCAFitterNCent(D0Candidates const&, DstarCandidates const& dstarCandidates, CollisionsCent const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
   {
     processData<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0Candidates, dstarCandidates, collisions, tracks, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNCent, "Process reconstructed D0-D* pairs with DCAFitterN and centrality", true);
+  PROCESS_SWITCH(HfTaskD0, processDataWithDCAFitterNCent, "Process reconstructed D0-D* pairs with DCAFitterN and centrality", false);
 
   // KFParticle D0 reconstruction, without centrality.
   void processDataWithKFParticle(D0CandidatesKF const&, DstarCandidates const& dstarCandidates, Collisions const& collisions, aod::TracksWExtra const& tracks, aod::BcFullInfos const& bcs)
@@ -1711,5 +1715,24 @@ struct HfTaskD0 {
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
 {
+  LOGP(info, "TCC_ARGS executable={}", cfgc.argv()[0]);
+
+  for (int i = 1; i < cfgc.argc(); ++i) {
+    const std::string arg = cfgc.argv()[i];
+
+    if (arg.starts_with("--process") ||
+        arg.starts_with("--hf-task-d0") ||
+        arg.starts_with("--configuration") ||
+        arg == "--id" ||
+        arg == "--framework-id") {
+      LOGP(info, "TCC_ARG[{}]={}", i, arg);
+
+      if (arg.find('=') == std::string::npos &&
+          i + 1 < cfgc.argc()) {
+        LOGP(info, "TCC_NEXT[{}]={}", i + 1, cfgc.argv()[i + 1]);
+      }
+    }
+  }
+
   return WorkflowSpec{adaptAnalysisTask<HfTaskD0>(cfgc)};
 }
