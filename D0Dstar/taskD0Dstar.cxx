@@ -261,30 +261,8 @@ struct HfTaskD0 {
      {"hMassReflBkgD0bar", "2-prong candidates (matched);#it{m}_{inv} (GeV/#it{c}^{2}); #it{p}_{T}; #it{y}", {HistType::kTH3F, {{120, 1.5848, 2.1848}, {150, 0., 30.}, {20, -5., 5.}}}},
      {"hMassSigBkgD0bar", "2-prong candidates (not checked);#it{m}_{inv} (GeV/#it{c}^{2}); #it{p}_{T}; #it{y}", {HistType::kTH3F, {{120, 1.5848, 2.1848}, {150, 0., 30.}, {20, -5., 5.}}}}}};
 
-    HistogramRegistry registryDstar{
-    "registryDstar",
-    {
-      {"hPtD0FromSelectedDstar",
-       "D0 daughters of selected D* candidates;"
-       "#it{p}_{T}(D^{0}) (GeV/#it{c});entries",
-       {HistType::kTH1F, {{100, 0., 50.}}}}
-    }};
-
-  void processDstarInputs(DstarCandidates const& candidates)
-  {
-    for (const auto& candidate : candidates) {
-      if (!candidate.isSelDstarToD0Pi()) {
-        continue;
-      }
-
-      registryDstar.fill(
-        HIST("hPtD0FromSelectedDstar"), candidate.ptD0());
-    }
-  }
-  PROCESS_SWITCH(HfTaskD0, processDstarInputs,
-                 "Read selected D* candidates and their D0 daughters", false);
   
-     void init(InitContext&)
+  void init(InitContext&)
   {
     std::array<bool, 14> doprocess{doprocessDataWithDCAFitterN, doprocessDataWithDCAFitterNCent, doprocessDataWithKFParticle, doprocessMcWithDCAFitterN, doprocessMcWithDCAFitterNCent, doprocessMcWithKFParticle, doprocessDataWithDCAFitterNMl, doprocessDataWithDCAFitterNMlCent, doprocessDataWithKFParticleMl, doprocessMcWithDCAFitterNMl, doprocessMcWithDCAFitterNMlCent, doprocessMcWithKFParticleMl, doprocessDataWithDCAFitterNWithUpc, doprocessDataWithDCAFitterNMlWithUpc};
     if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0 && !doprocessDstarInputs) {
@@ -1128,7 +1106,7 @@ struct HfTaskD0 {
         //If particle passes D0 or D0bar hyptohesis, fill histograms
         if (candidate.isSelD0() >= selectionFlagD0 || candidate.isSelD0bar() >= selectionFlagD0bar) {
           registry.fill(HIST("hPtVsYRecSigReco"), ptRec, yRec); // rec. level pT
-          registry.fill(HIST("hPtRecSig"), ptRec // rec. level pT spectrum
+          registry.fill(HIST("hPtRecSig"), ptRec); // rec. level pT spectrum
         }
         //Check if candidate is prompt
         if (candidate.originMcRec() == RecoDecay::OriginType::Prompt) {
