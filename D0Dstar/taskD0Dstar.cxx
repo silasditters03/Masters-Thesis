@@ -92,6 +92,8 @@ struct HfTaskD0 {
 
   Configurable<int> selectionFlagD0{"selectionFlagD0", 1, "Selection Flag for D0"};
   Configurable<int> selectionFlagD0bar{"selectionFlagD0bar", 1, "Selection Flag for D0bar"};
+  Configurable<bool> selectionFlagDstarToD0Pi{"selectionFlagDstarToD0Pi", true, "Final selection flag for D* candidates"};
+  Configurable<bool> selectionFlagHfD0ToPiK{"selectionFlagHfD0ToPiK", true, "D0 decay-type flag for D* candidates"};
   Configurable<double> yCandGenMax{"yCandGenMax", 0.5, "max. gen particle rapidity"};
   Configurable<double> yCandRecoMax{"yCandRecoMax", 0.8, "max. cand. rapidity"};
   Configurable<int> selectionFlagHf{"selectionFlagHf", 1, "Selection Flag for HF flagged candidates"};
@@ -165,6 +167,14 @@ struct HfTaskD0 {
   Partition<D0CandidatesMlKF> selectedD0CandidatesMlKF = aod::hf_sel_candidate_d0::isSelD0 >= selectionFlagD0 || aod::hf_sel_candidate_d0::isSelD0bar >= selectionFlagD0bar;
   Partition<D0CandidatesMlMc> selectedD0CandidatesMlMc = aod::hf_sel_candidate_d0::isRecoHfFlag >= selectionFlagHf;
   Partition<D0CandidatesMlMcKF> selectedD0CandidatesMlMcKF = aod::hf_sel_candidate_d0::isRecoHfFlag >= selectionFlagHf;
+
+  // Reconstructed data: candidates passing the final D* selection.
+  Partition<DstarCandidates> selectedDstarCandidates = aod::hf_sel_candidate_dstar::isSelDstarToD0Pi == selectionFlagDstarToD0Pi;
+  Partition<DstarCandidatesMl> selectedDstarCandidatesMl = aod::hf_sel_candidate_dstar::isSelDstarToD0Pi == selectionFlagDstarToD0Pi;
+  // Reconstructed MC: retain candidates passing the D0 decay-type flag,
+  // allowing the later analysis to study each selection stage.
+  Partition<DstarCandidatesMc> selectedDstarCandidatesMc = aod::hf_sel_candidate_dstar::isRecoD0Flag == selectionFlagHfD0ToPiK;
+  Partition<DstarCandidatesMlMc> selectedDstarCandidatesMlMc = aod::hf_sel_candidate_dstar::isRecoD0Flag == selectionFlagHfD0ToPiK;
 
   // ThnSparse for ML outputScores and Vars
   ConfigurableAxis thnConfigAxisBkgScore{"thnConfigAxisBkgScore", {50, 0, 1}, "Bkg score bins"};
