@@ -58,9 +58,11 @@
 #include <array>
 #include <cstdint>
 #include <numeric>
+#include <cmath>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <Math/Vector4D.h>
 
 using namespace o2;
 using namespace o2::analysis;
@@ -96,6 +98,7 @@ struct HfTaskD0 {
   Configurable<bool> selectionFlagHfD0ToPiK{"selectionFlagHfD0ToPiK", true, "D0 decay-type flag for D* candidates"};
   Configurable<double> yCandGenMax{"yCandGenMax", 0.5, "max. gen particle rapidity"};
   Configurable<double> yCandRecoMax{"yCandRecoMax", 0.8, "max. cand. rapidity"};
+  Configurable<double> yTccRecoMax{"yTccRecoMax", 0.8, "Maximum absolute reconstructed D0-D* pair rapidity; negative disables cut"};
   Configurable<int> selectionFlagHf{"selectionFlagHf", 1, "Selection Flag for HF flagged candidates"};
   Configurable<int> selectionTopol{"selectionTopol", 1, "Selection Flag for topologically selected candidates"};
   Configurable<int> selectionCand{"selectionCand", 1, "Selection Flag for conj. topol. selected candidates"};
@@ -332,6 +335,10 @@ struct HfTaskD0 {
     registry.add("hNormalisedDecLengthxyVsPtSig", "2-prong candidates;decay length xy (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 40.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     registry.add("hDecLengthVsPtSig", "2-prong candidates;decay length (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     registry.add("hDecLengthxyVsPtSig", "2-prong candidates;decay length xy (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    registry.add("hMassTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{600, 3.6, 4.2}}});
+    registry.add("hPtTcc", "Selected D0-D* pairs; #it{p}_{T}(D^{0}D*) (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
+    registry.add("hMassVsPtTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});" "#it{p}_{T}(D^{0}D*) (GeV/#it{c})", {HistType::kTH2F, {{600, 3.6, 4.2}, {200, 0., 100.}}});
+
 
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
     const AxisSpec thnAxisPt{thnConfigAxisPt, "#it{p}_{T} (GeV/#it{c})"};
@@ -559,7 +566,7 @@ struct HfTaskD0 {
       }
 
       //Get D0 from Dstar's collision
-      const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionID);
+      const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
 
       //Loop over D0
       for (const auto& d0 : d0s) {
@@ -572,7 +579,7 @@ struct HfTaskD0 {
         //Checks if Tetraquark has right charge
         const bool isTccPlus = softPiSign > 0 && d0.isSelD0() >= selectionFlagD0;
         const bool isTccMinus = softPiSign < 0 && d0.isSelD0bar() >= selectionFlagD0bar;
-        if (!isTccPlus & !isTccMinus) {
+        if (!isTccPlus && !isTccMinus) {
           continue;
         }
 
@@ -586,28 +593,58 @@ struct HfTaskD0 {
             continue;
           }
         
+        //Get D0 mass
+        double massD0;
 
+        //Ternary expression, we know if we have D0 or D0bar from charge of Tcc
+        if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle){
+          massD0 = isTccPlus ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
+        }
+        else {
+          massD0 = isTccPlus ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
+        }
 
+        //Get D* mass
+        const double massDstar = isTccPlus ? dstar.invMassDstar() : dstar.invMassAntiDstar();
 
+        //Get three momenta
+        const auto pD0 = d0.pVector();
+        const auto pDstar = dstar.pVector();
 
+        //Get four-momenta
+        const ROOT::Math::PxPyPzMVector fourVectorD0(pD0[0], pD0[1], pD0[2], massD0);
+        const ROOT::Math::PxPyPzMVector fourVectorDstar(pDstar[0], pDstar[1], pDstar[2], massDstar);
 
+        const auto fourVectorTcc = fourVectorD0 + fourVectorDstar; //Tcc 4 momentum
+
+        const double massTcc = fourvectorTcc.M(); //Tcc mass from 4-vector
+        const double ptTcc = fourVectorTcc.Pt(); //Tcc pT from 4-vector
+        const double yTcc = fourVectorTcc.Rapidity(); //Tcc rapidity from 4-vector
+
+        //Rapidity cut for TCC
+        if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax){
+          continue;
+        }
+
+        //Fills histograms
+        registry.fill(HIST("hMassTcc"), massTcc);
+        registry.fill(HIST("hPtTcc"), ptTcc);
+        registry.fill(HIST("hMassVsPtTcc"), massTcc, ptTcc);
 
       }
 
 
-
-
-
     }
+  }
 
-
-
-
-
-
-
-
-
+  //OLD D0 PROCESSING FUNCTION FOR REFERENCE
+//Template function: Allows processData to work with different configurations
+  template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
+  void processDataD0REFERENCE(CandType const& candidates,
+                   CollType const&,
+                   aod::TracksWExtra const&,
+                   BCsType const&)
+  {
     //Loop over candidates, candidate is predefined join of tables
     for (const auto& candidate : candidates) {
       //Bitmask check: if candidate not flagged as D->K pi, skip it
