@@ -1169,13 +1169,13 @@ struct HfTaskD0 {
 
   
   //New ProcessMC function for Tcc
-  template <int ReconstructioType, bool ApplyML, typename D0CandType, typename DstarCandType, typename CollType, typename BCsType>
+  template <int ReconstructionType, bool ApplyML, typename D0CandType, typename DstarCandType, typename CollType, typename BCsType>
   void processMc(D0CandType const& d0Candidates,
                  DstarCandType const& dstarCandidates,
                  aod::McParticles const& mcParticles,
                  TracksSelQuality const& tracks,
-                 CollType const7 collisions,
-                 McCollisionsWithCentrality const mcCollisions,
+                 CollType const& collisions,
+                 McCollisionsWithCentrality const& mcCollisions,
                  BCsType const& bcs)
   {
     //Reconstructed level
@@ -1223,25 +1223,25 @@ struct HfTaskD0 {
         //Reconstructed constituent masses
         double massD0;
 
-        if constexpr (ReconstructionType == aod::hf_cand::VertexType::KfParticle) {
+        if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
           massD0 = isTccPlus ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
         }
         else{
           massD0 = isTccPlus ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
         }
 
-        const double massDstar = isTccPlus ?  dstar.invMassDstar() : dstar.invmassAntiDstar();
+        const double massDstar = isTccPlus ?  dstar.invMassDstar() : dstar.invMassAntiDstar();
         
         const auto pD0 = d0.pVector();
         const auto pDstar = dstar.pVector();
 
         const ROOT::Math::PxPyPzMVector fourVectorD0(pD0[0], pD0[1], pD0[2], massD0);
-        const ROOT::Math::PxPyPzMVector foutVectorDstar(pDstar[0], pDstar[1], pDstar[2], massDstar);
+        const ROOT::Math::PxPyPzMVector fourVectorDstar(pDstar[0], pDstar[1], pDstar[2], massDstar);
 
         const auto fourVectorTcc = fourVectorD0 + fourVectorDstar;
 
         const double massTcc = fourVectorTcc.M();
-        const double ptTcc = fourvectorTcc.Pt();
+        const double ptTcc = fourVectorTcc.Pt();
         const double yTcc = fourVectorTcc.Rapidity();
 
         if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax) {
@@ -1260,8 +1260,8 @@ struct HfTaskD0 {
         const int expectedSign = isTccPlus ? 1 : -1;
 
         //Signed matching also checks selected particle/antiparticle hypthesis
-        const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedsign * channelD0;
-        const bool matchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == expectedsign * channelDstar;
+        const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedSign * channelD0;
+        const bool matchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == expectedSign * channelDstar;
 
         const int truthStatus = static_cast<int>(matchedD0) + 2 * static_cast<int>(matchedDstar);
         registry.fill(HIST("hMcPairTruthStatus"), truthStatus);
@@ -1280,7 +1280,7 @@ struct HfTaskD0 {
           //Follow the daugther tracks MC ancestry to their meson parents
           //"True" also accepts the charge-conjugate particles.
           const int indexMcD0 = RecoDecay::getMother(mcParticles, d0Track.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kD0, true);
-          const int indexMcDstar = RecoDecay::getMother(mcParticles, softPiTrack.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kDstar, true);
+          const int indexMcDstar = RecoDecay::getMother(mcParticles, softPiTrack.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kDStar, true);
 
           if (indexMcD0 < 0 || indexMcDstar < 0) {
             continue;
@@ -1292,18 +1292,18 @@ struct HfTaskD0 {
 
           //Check generated flavour against reconstructed hypothesis
           if (mcD0.pdgCode() != expectedSign * o2::constants::physics::Pdg::kD0 ||
-              mcDstar.pdgCode() != expectedSign * o2::constants::physics::Pdg::kDstar){
+              mcDstar.pdgCode() != expectedSign * o2::constants::physics::Pdg::kDStar){
                 continue;
               }
 
           //Both candidates must have same generated collision
-          if (mcD0.mcCollisionsId() != mcDstar.mcCollisionsId()) {
+          if (mcD0.mcCollisionId() != mcDstar.mcCollisionId()) {
             continue;
           }
 
           //Check if they share the same mother
           //IndexCommonMother, default = -1, means "no found"
-          int IndexCommonMother = -1;
+          int indexCommonMother = -1;
           for (const auto& motherD0 : mcD0.mothers_as<aod::McParticles>()) {
             for (const auto& motherDstar : mcDstar.mothers_as<aod::McParticles>()) {
               if (motherD0.globalIndex() == motherDstar.globalIndex()) {
@@ -1336,7 +1336,7 @@ struct HfTaskD0 {
         registry.fill(HIST("hMcGenCounts"), 0.);
       }
 
-      if (absPdg == o2::constants::physics::Pdg::kDstar) {
+      if (absPdg == o2::constants::physics::Pdg::kDStar) {
         registry.fill(HIST("hMcGenCounts"), 1.);
       }
 
@@ -1345,7 +1345,7 @@ struct HfTaskD0 {
       }
 
       //Check if MC particle has parent -> D0 + D* decay
-      const bool hasD0DstarDecay = RecoDecay::isMatched::MCGen(mcParticles, particle, absPdg, std::array<int,2>{o2::constants::physics::Pdg::kD0, o2::constants::physics::Pdg::kDstar}, true, nullptr, 1);
+      const bool hasD0DstarDecay = RecoDecay::isMatchedMCGen(mcParticles, particle, absPdg, std::array<int,2>{o2::constants::physics::Pdg::kD0, o2::constants::physics::Pdg::kDStar}, true, nullptr, 1);
 
       if (!hasD0DstarDecay) {
         continue;
@@ -1363,11 +1363,8 @@ struct HfTaskD0 {
       LOGP(info, "Generated D0-Dstar parent: PDG={}, mass={}, pT={}", particle.pdgCode(), fourVectorParent.M(), fourVectorParent.Pt());
     }
 
-    
+
   }
-
-
-
 
 
   //THIS IS THE OLD PROCESSMC FUNCTION FOR REFERENCE
