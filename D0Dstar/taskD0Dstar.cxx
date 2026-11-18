@@ -284,13 +284,13 @@ struct HfTaskD0 {
   
   void init(InitContext& ic)
   {
-    LOGP(info, "Registry: DCAFitterN={} Cent={}", ic.options().get<bool>("processDataWithDCAFitterN"), ic.options().get<bool>("processDataWithDCAFitterNCent"));
-    LOGP(info, "Members: DCAFitterN={} Cent={}", static_cast<bool>(doprocessDataWithDCAFitterN), static_cast<bool>(doprocessDataWithDCAFitterNCent));
+    // LOGP(info, "Registry: DCAFitterN={} Cent={}", ic.options().get<bool>("processDataWithDCAFitterN"), ic.options().get<bool>("processDataWithDCAFitterNCent"));
+    // LOGP(info, "Members: DCAFitterN={} Cent={}", static_cast<bool>(doprocessDataWithDCAFitterN), static_cast<bool>(doprocessDataWithDCAFitterNCent));
 
-    // Keep your existing initialization below.
-    LOGP(info, "Active switches: DCAFitterN={}, DCAFitterNCent={}",
-     static_cast<bool>(doprocessDataWithDCAFitterN),
-     static_cast<bool>(doprocessDataWithDCAFitterNCent));
+    // // Keep your existing initialization below.
+    // LOGP(info, "Active switches: DCAFitterN={}, DCAFitterNCent={}",
+    //  static_cast<bool>(doprocessDataWithDCAFitterN),
+    //  static_cast<bool>(doprocessDataWithDCAFitterNCent));
     std::array<bool, 14> doprocess{doprocessDataWithDCAFitterN, doprocessDataWithDCAFitterNCent, doprocessDataWithKFParticle, doprocessMcWithDCAFitterN, doprocessMcWithDCAFitterNCent, doprocessMcWithKFParticle, doprocessDataWithDCAFitterNMl, doprocessDataWithDCAFitterNMlCent, doprocessDataWithKFParticleMl, doprocessMcWithDCAFitterNMl, doprocessMcWithDCAFitterNMlCent, doprocessMcWithKFParticleMl, doprocessDataWithDCAFitterNWithUpc, doprocessDataWithDCAFitterNMlWithUpc};
     if ((std::accumulate(doprocess.begin(), doprocess.end(), 0)) == 0) {
       LOGP(fatal, "At least one process function should be enabled at a time.");
@@ -342,10 +342,18 @@ struct HfTaskD0 {
     registry.add("hNormalisedDecLengthxyVsPtSig", "2-prong candidates;decay length xy (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 40.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     registry.add("hDecLengthVsPtSig", "2-prong candidates;decay length (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     registry.add("hDecLengthxyVsPtSig", "2-prong candidates;decay length xy (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
+    //New plots Silas
     registry.add("hMassTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{600, 3.6, 4.2}}});
     registry.add("hPtTcc", "Selected D0-D* pairs; #it{p}_{T}(D^{0}D*) (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
     registry.add("hMassVsPtTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});" "#it{p}_{T}(D^{0}D*) (GeV/#it{c})", {HistType::kTH2F, {{600, 3.6, 4.2}, {200, 0., 100.}}});
-
+    registry.add("hTccInputs", "Input counts;counter;count", {HistType::kTH1D, {{3, -0.5, 2.5}}});
+    registry.add("hTccDstarFlow", "D* selection for pairing;stage;count", {HistType::kTH1D, {{4, -0.5, 3.5}}});
+    registry.add("hTccPairFlow", "D0-D* pairing selections;stage;count", {HistType::kTH1D, {{5, -0.5, 4.5}}});
+    registry.add("hMcPairTruthStatus", "Selected reconstructed pairs;constituent matching category;entries", {HistType::kTH1F, {{4, -0.5, 3.5}}});
+    registry.add("hMassTccBothMatched", "Pairs with both constituents truth matched;#it{M}(D^{0}D*) (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{600, 3.6, 4.2}}});
+    registry.add("hMcGenCounts", "Generated particle counts;category;entries", {HistType::kTH1F, {{3, -0.5, 2.5}}});
+    registry.add("hMassGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent mass (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{1000, 0., 10.}}});
+    registry.add("hPtGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent #it{p}_{T} (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
 
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
     const AxisSpec thnAxisPt{thnConfigAxisPt, "#it{p}_{T} (GeV/#it{c})"};
@@ -558,30 +566,41 @@ struct HfTaskD0 {
                    aod::TracksWExtra const&,
                    BCsType const&)
   {
+    registry.fill(HIST("hTccInputs"), 0.);
+    registry.fill(HIST("hTccInputs"), 1., static_cast<double>(d0Candidates.size()));
+    registry.fill(HIST("hTccInputs"), 2., static_cast<double>(dstarCandidates.size()));
     //Dstar Loop, first because its rarer
     for (const auto& dstar : dstarCandidates) {
 
+      registry.fill(HIST("hTccDstarFlow"), 0);
       //Check if candidate is flagged as correct Dstar, if not: skip
       if (!dstar.isSelDstarToD0Pi()) {
         continue;
       }
+      registry.fill(HIST("hTccDstarFlow"), 1);
 
       //Check if there is a soft pion; if not: skip
       const auto softPiSign = dstar.signSoftPi();
       if (softPiSign == 0){
         continue;
       }
+      registry.fill(HIST("hTccDstarFlow"), 2);
 
       //Get D0 from Dstar's collision
       const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
 
+      if (d0s.size() > 0) {
+        registry.fill(HIST("hTccDstarFlow"), 3);
+      }
+
       //Loop over D0
       for (const auto& d0 : d0s) {
-
+        registry.fill(HIST("hTccPairFlow"), 0);
         //Check if D0 satisfies D0 -> K Pi flag
         if (!(d0.hfflag() & (1 << aod::hf_cand_2prong::DecayType::D0ToPiK))) {
           continue;
         }
+        registry.fill(HIST("hTccPairFlow"), 1);
 
         //Checks if Tetraquark has right charge
         const bool isTccPlus = softPiSign > 0 && d0.isSelD0() >= selectionFlagD0;
@@ -589,6 +608,7 @@ struct HfTaskD0 {
         if (!isTccPlus && !isTccMinus) {
           continue;
         }
+        registry.fill(HIST("hTccPairFlow"), 2);
 
         //Checks if no tracks overlap
         if (d0.prong0Id() == dstar.prong0Id() ||
@@ -599,6 +619,7 @@ struct HfTaskD0 {
           d0.prong1Id() == dstar.prongPiId()) {
             continue;
           }
+          registry.fill(HIST("hTccPairFlow"), 3);
         
         //Get D0 mass
         double massD0;
@@ -632,6 +653,7 @@ struct HfTaskD0 {
         if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax){
           continue;
         }
+        registry.fill(HIST("hTccPairFlow"), 4);
 
         //Fills histograms
         registry.fill(HIST("hMassTcc"), massTcc);
@@ -1145,9 +1167,213 @@ struct HfTaskD0 {
   PROCESS_SWITCH(HfTaskD0, processDataWithKFParticleMl, "Process reconstructed D0-D* pairs with KFParticle D0 reconstruction and D0 ML information", false);
   // TODO: add processKFParticleMlCent
 
+  
+  //New ProcessMC function for Tcc
+  template <int ReconstructioType, bool ApplyML, typename D0CandType, typename DstarCandType, typename CollType, typename BCsType>
+  void processMc(D0CandType const& d0Candidates,
+                 DstarCandType const& dstarCandidates,
+                 aod::McParticles const& mcParticles,
+                 TracksSelQuality const& tracks,
+                 CollType const7 collisions,
+                 McCollisionsWithCentrality const mcCollisions,
+                 BCsType const& bcs)
+  {
+    //Reconstructed level
+    for (const auto& dstar : dstarCandidates) {
+
+      //Check Dstar -> D0 pi candidate flag
+      if (!dstar.isSelDstarToD0Pi()) {
+        continue;
+      }
+
+      //Check if there is a proper soft pion
+      const auto softPiSign = dstar.signSoftPi();
+      if (softPiSign == 0) {
+        continue;
+      }
+
+      //Get D0 candidates in D*'s collision
+      const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
+
+      for (const auto& d0 : d0s) {
+        
+        //Check if D0 -> K Pi flag is satisfied
+        if (!(d0.hfflag() & (1 << aod::hf_cand_2prong::DecayType::D0ToPiK))) {
+          continue;
+        }
+
+        const bool isTccPlus = softPiSign > 0 && d0.isSelD0() >= selectionFlagD0;
+        const bool isTccMinus = softPiSign < 0 && d0.isSelD0bar() >= selectionFlagD0bar;
+
+        //Check if Tcc has right charge
+        if (!isTccPlus && !isTccMinus) {
+          continue;
+        }
+
+        // Reject shared tracks.
+        if (d0.prong0Id() == dstar.prong0Id() ||
+            d0.prong0Id() == dstar.prong1Id() ||
+            d0.prong0Id() == dstar.prongPiId() ||
+            d0.prong1Id() == dstar.prong0Id() ||
+            d0.prong1Id() == dstar.prong1Id() ||
+            d0.prong1Id() == dstar.prongPiId()) {
+          continue;
+        }
+
+        //Reconstructed constituent masses
+        double massD0;
+
+        if constexpr (ReconstructionType == aod::hf_cand::VertexType::KfParticle) {
+          massD0 = isTccPlus ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
+        }
+        else{
+          massD0 = isTccPlus ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
+        }
+
+        const double massDstar = isTccPlus ?  dstar.invMassDstar() : dstar.invmassAntiDstar();
+        
+        const auto pD0 = d0.pVector();
+        const auto pDstar = dstar.pVector();
+
+        const ROOT::Math::PxPyPzMVector fourVectorD0(pD0[0], pD0[1], pD0[2], massD0);
+        const ROOT::Math::PxPyPzMVector foutVectorDstar(pDstar[0], pDstar[1], pDstar[2], massDstar);
+
+        const auto fourVectorTcc = fourVectorD0 + fourVectorDstar;
+
+        const double massTcc = fourVectorTcc.M();
+        const double ptTcc = fourvectorTcc.Pt();
+        const double yTcc = fourVectorTcc.Rapidity();
+
+        if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax) {
+          continue;
+        }
+
+        //Inclusive reconstructed pairs
+        registry.fill(HIST("hMassTcc"), massTcc);
+        registry.fill(HIST("hPtTcc"), ptTcc);
+        registry.fill(HIST("hMassVsPtTcc"), massTcc, ptTcc);
+
+        //MC-specific information starts here
+        constexpr int channelD0 = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
+        constexpr int channelDstar = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
+
+        const int expectedSign = isTccPlus ? 1 : -1;
+
+        //Signed matching also checks selected particle/antiparticle hypthesis
+        const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedsign * channelD0;
+        const bool matchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == expectedsign * channelDstar;
+
+        const int truthStatus = static_cast<int>(matchedD0) + 2 * static_cast<int>(matchedDstar);
+        registry.fill(HIST("hMcPairTruthStatus"), truthStatus);
+
+        if (matchedD0 && matchedDstar) {
+          registry.fill(HIST("hMassTccBothMatched"), massTcc);
+
+          //Get on daugther track from independant D0, and soft pion from D*
+          const auto d0Track = d0.template prong0_as<TracksSelQuality>();
+          const auto softPiTrack = dstar.template prongPi_as<TracksSelQuality>();
+
+          if (!d0Track.has_mcParticle() || !softPiTrack.has_mcParticle()) {
+            continue;
+          }
+
+          //Follow the daugther tracks MC ancestry to their meson parents
+          //"True" also accepts the charge-conjugate particles.
+          const int indexMcD0 = RecoDecay::getMother(mcParticles, d0Track.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kD0, true);
+          const int indexMcDstar = RecoDecay::getMother(mcParticles, softPiTrack.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kDstar, true);
+
+          if (indexMcD0 < 0 || indexMcDstar < 0) {
+            continue;
+          }
+
+          //getMother returns global indices; rawIteratorAt uses local row indices
+          const auto mcD0 = mcParticles.rawIteratorAt(indexMcD0 - mcParticles.offset());
+          const auto mcDstar = mcParticles.rawIteratorAt(indexMcDstar - mcParticles.offset());
+
+          //Check generated flavour against reconstructed hypothesis
+          if (mcD0.pdgCode() != expectedSign * o2::constants::physics::Pdg::kD0 ||
+              mcDstar.pdgCode() != expectedSign * o2::constants::physics::Pdg::kDstar){
+                continue;
+              }
+
+          //Both candidates must have same generated collision
+          if (mcD0.mcCollisionsId() != mcDstar.mcCollisionsId()) {
+            continue;
+          }
+
+          //Check if they share the same mother
+          //IndexCommonMother, default = -1, means "no found"
+          int IndexCommonMother = -1;
+          for (const auto& motherD0 : mcD0.mothers_as<aod::McParticles>()) {
+            for (const auto& motherDstar : mcDstar.mothers_as<aod::McParticles>()) {
+              if (motherD0.globalIndex() == motherDstar.globalIndex()) {
+                indexCommonMother = motherD0.globalIndex();
+                break;
+              }
+            }
+            if (indexCommonMother >= 0) {
+              break;
+            }
+          }
+          if (indexCommonMother < 0) {
+            continue;
+          }
+
+          //Common mother of D0 and D*
+          const auto commonMother = mcParticles.rawIteratorAt(indexCommonMother - mcParticles.offset());
+
+          // Temporary diagnostic: identify what actually produced the pair.
+          LOGP(info, "Matched D0-Dstar pair: common mother PDG={}, pT={}", commonMother.pdgCode(), commonMother.pt());
+        }
+      }
+    }
+
+    //Generated level
+    for (const auto& particle : mcParticles) {
+      const int absPdg = std::abs(particle.pdgCode());
+
+      if (absPdg == o2::constants::physics::Pdg::kD0) {
+        registry.fill(HIST("hMcGenCounts"), 0.);
+      }
+
+      if (absPdg == o2::constants::physics::Pdg::kDstar) {
+        registry.fill(HIST("hMcGenCounts"), 1.);
+      }
+
+      if (!particle.has_daughters()) {
+        continue;
+      }
+
+      //Check if MC particle has parent -> D0 + D* decay
+      const bool hasD0DstarDecay = RecoDecay::isMatched::MCGen(mcParticles, particle, absPdg, std::array<int,2>{o2::constants::physics::Pdg::kD0, o2::constants::physics::Pdg::kDstar}, true, nullptr, 1);
+
+      if (!hasD0DstarDecay) {
+        continue;
+      }
+
+      registry.fill(HIST("hMcGenCounts"), 2.);
+
+      //Get parents 4-momentum
+      const ROOT::Math::PxPyPzEVector fourVectorParent(particle.px(), particle.py(), particle.pz(), particle.e());
+
+      registry.fill(HIST("hMassGenD0DstarParent"), fourVectorParent.M());
+      registry.fill(HIST("hPtGenD0DstarParent"), fourVectorParent.Pt());
+
+       // Temporary diagnostic to establish the parent's identity.
+      LOGP(info, "Generated D0-Dstar parent: PDG={}, mass={}, pT={}", particle.pdgCode(), fourVectorParent.M(), fourVectorParent.Pt());
+    }
+
+    
+  }
+
+
+
+
+
+  //THIS IS THE OLD PROCESSMC FUNCTION FOR REFERENCE
   //Template function to allow this processMc to work with different configurations
   template <int ReconstructionType, bool ApplyMl, typename CandType, typename CollType, typename BCsType>
-  void processMc(CandType const& candidates,
+  void processMcD0REFERENCE(CandType const& candidates,
                  soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
                  TracksSelQuality const&,
                  CollType const& collisions,
