@@ -1838,72 +1838,78 @@ struct HfTaskD0 {
     }
   }
 
-  void processMcWithDCAFitterN(D0CandidatesMc const&,
-                               soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
-                               TracksSelQuality const& tracks,
-                               CollisionsWithMcLabels const& collisions,
-                               McCollisionsWithCentrality const& mcCollisions,
-                               aod::BcFullInfos const& bcs)
+    void processMcWithDCAFitterN(D0CandidatesMc const&,
+                              DstarCandidatesMc const& dstarCandidates,
+                              aod::McParticles const& mcParticles,
+                              TracksSelQuality const& tracks,
+                              CollisionsWithMcLabels const& collisions,
+                              McCollisionsWithCentrality const& mcCollisions,
+                              aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, mcParticles, tracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, dstarCandidates, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterN, "Process MC with DCAFitterN", false);
+  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterN, "Process MC D0-Dstar pairs with DCAFitterN", true);
 
   void processMcWithDCAFitterNCent(D0CandidatesMc const&,
-                                   soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
-                                   TracksSelQuality const& tracks,
-                                   CollisionsWithMcLabelsCent const& collisions,
-                                   McCollisionsWithCentrality const& mcCollisions,
-                                   aod::BcFullInfos const& bcs)
+                                  DstarCandidatesMc const& dstarCandidates,
+                                  aod::McParticles const& mcParticles,
+                                  TracksSelQuality const& tracks,
+                                  CollisionsWithMcLabelsCent const& collisions,
+                                  McCollisionsWithCentrality const& mcCollisions,
+                                  aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, mcParticles, tracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, dstarCandidates, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNCent, "Process MC with DCAFitterN and centrality", false);
+  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNCent, "Process MC D0-Dstar pairs with DCAFitterN and centrality", false);
 
   void processMcWithKFParticle(D0CandidatesMcKF const&,
-                               soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
-                               TracksSelQuality const& tracks,
-                               CollisionsWithMcLabels const& collisions,
-                               McCollisionsWithCentrality const& mcCollisions,
-                               aod::BcFullInfos const& bcs)
+                              DstarCandidatesMc const& dstarCandidates,
+                              aod::McParticles const& mcParticles,
+                              TracksSelQuality const& tracks,
+                              CollisionsWithMcLabels const& collisions,
+                              McCollisionsWithCentrality const& mcCollisions,
+                              aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::KfParticle, false>(selectedD0CandidatesMcKF, mcParticles, tracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::KfParticle, false>(selectedD0CandidatesMcKF, dstarCandidates, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processMcWithKFParticle, "Process MC with KFParticle", false);
-  // TODO: add the processMcWithKFParticleCent
+  PROCESS_SWITCH(HfTaskD0, processMcWithKFParticle, "Process MC D0-Dstar pairs with KFParticle D0 reconstruction", false);
+  // TODO: add processMcWithKFParticleCent
 
   void processMcWithDCAFitterNMl(D0CandidatesMlMc const&,
-                                 soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
-                                 TracksSelQuality const& tracks,
-                                 CollisionsWithMcLabels const& collisions,
-                                 McCollisionsWithCentrality const& mcCollisions,
-                                 aod::BcFullInfos const& bcs)
+                                DstarCandidatesMc const& dstarCandidates,
+                                aod::McParticles const& mcParticles,
+                                TracksSelQuality const& tracks,
+                                CollisionsWithMcLabels const& collisions,
+                                McCollisionsWithCentrality const& mcCollisions,
+                                aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, mcParticles, tracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, dstarCandidates, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNMl, "Process MC with DCAFitterN and ML selection", false);
+  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNMl, "Process MC D0-Dstar pairs with DCAFitterN and D0 ML information", false);
 
   void processMcWithDCAFitterNMlCent(D0CandidatesMlMc const&,
-                                     soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
-                                     TracksSelQuality const& tracks,
-                                     CollisionsWithMcLabelsCent const& collisions,
-                                     McCollisionsWithCentrality const& mcCollisions,
-                                     aod::BcFullInfos const& bcs)
+                                    DstarCandidatesMc const& dstarCandidates,
+                                    aod::McParticles const& mcParticles,
+                                    TracksSelQuality const& tracks,
+                                    CollisionsWithMcLabelsCent const& collisions,
+                                    McCollisionsWithCentrality const& mcCollisions,
+                                    aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, mcParticles, tracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::DCAFitter, true>(selectedD0CandidatesMlMc, dstarCandidates, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNMlCent, "Process MC with DCAFitterN and ML selection and centrality", false);
+  PROCESS_SWITCH(HfTaskD0, processMcWithDCAFitterNMlCent, "Process MC D0-Dstar pairs with DCAFitterN, D0 ML information and centrality", false);
 
   void processMcWithKFParticleMl(D0CandidatesMlMcKF const&,
-                                 soa::Join<aod::McParticles, aod::HfCand2ProngMcGen> const& mcParticles,
-                                 TracksSelQuality const& tracks,
-                                 CollisionsWithMcLabels const& collisions,
-                                 McCollisionsWithCentrality const& mcCollisions,
-                                 aod::BcFullInfos const& bcs)
+                                DstarCandidatesMc const& dstarCandidates,
+                                aod::McParticles const& mcParticles,
+                                TracksSelQuality const& tracks,
+                                CollisionsWithMcLabels const& collisions,
+                                McCollisionsWithCentrality const& mcCollisions,
+                                aod::BcFullInfos const& bcs)
   {
-    processMc<aod::hf_cand::VertexerType::KfParticle, true>(selectedD0CandidatesMlMcKF, mcParticles, tracks, collisions, mcCollisions, bcs);
+    processMc<aod::hf_cand::VertexerType::KfParticle, true>(selectedD0CandidatesMlMcKF, dstarCandidates, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0, processMcWithKFParticleMl, "Process MC with KFParticle and ML selections", false);
+  PROCESS_SWITCH(HfTaskD0, processMcWithKFParticleMl, "Process MC D0-Dstar pairs with KFParticle D0 reconstruction and D0 ML information", false);
   // TODO: add the processMcWithKFParticleMlCent
 
   void processDataWithDCAFitterNWithUpc(soa::Join<aod::Collisions, aod::EvSels, aod::PVMults> const& collisions,
