@@ -369,7 +369,13 @@ struct HfTaskD0Dstar {
     registry.add("hMassD0DstarGen", "Selected generated D0-Dstar pairs;#it{M}(D^{0}D*) (GeV/#it{c}^{2});Pairs", {HistType::kTH1D, {{1200, 3.6, 15.6}}});
     registry.add("hPtD0DstarGen", "Selected generated D0-Dstar pairs;#it{p}_{T} (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
     registry.add("hMassVsPtD0DstarGen", "Selected generated D0-Dstar pairs;#it{M}(D^{0}D*) (GeV/#it{c}^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2D, {{1200, 3.6, 15.6}, {200, 0., 100.}}});
-    
+    registry.add("hPtD0InSelectedGenPairs", "Independent D0 in selected generated pairs;#it{p}_{T}(D^{0}) (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}}); 
+    registry.add("hPtDstarInSelectedGenPairs", "Dstar in selected generated pairs;#it{p}_{T}(D*) (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
+    registry.add("hDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#eta = #eta(D^{0}) - #eta(D*);Pairs", {HistType::kTH1D, {{200, -5., 5.}}});
+    registry.add("hDeltaPhiGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi = #varphi(D^{0}) - #varphi(D*) (rad);Pairs", {HistType::kTH1D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}}});
+    registry.add("hDeltaPhiVsDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#eta;#Delta#varphi (rad)", {HistType::kTH2D, {{200, -5., 5.}, {64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}}});
+
+
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
     const AxisSpec thnAxisPt{thnConfigAxisPt, "#it{p}_{T} (GeV/#it{c})"};
     const AxisSpec thnAxisPtB{thnConfigAxisPtB, "#it{p}_{T}^{B} (GeV/#it{c})"};
@@ -1184,7 +1190,7 @@ struct HfTaskD0Dstar {
         continue;
       }
 
-      if (particle.mcCollisionsId() < 0) {
+      if (particle.mcCollisionId() < 0) {
         continue;
       }
 
@@ -1206,9 +1212,9 @@ struct HfTaskD0Dstar {
       const int expectedSign = genDstar.pdgCode() > 0 ? 1 : -1;
 
       //Check Dstar -> D0 pi and get its daugthers
-      std::vector<int> dstarDaugtherIds;
+      std::vector<int> dstarDaughterIds;
 
-      const bool matchesDstarDecay = RecoDecay::isMatchedGen(mcParticles, genDstar, o2::constants::physics::Pdg::kDStar,
+      const bool matchesDstarDecay = RecoDecay::isMatchedMCGen(mcParticles, genDstar, o2::constants::physics::Pdg::kDStar,
                     std::array<int, 2>{o2::constants::physics::Pdg::kD0, +kPiPlus}, true, nullptr, 1, &dstarDaughterIds);
 
       int internalD0Id = -1;
@@ -1216,7 +1222,7 @@ struct HfTaskD0Dstar {
 
       if (matchesDstarDecay) {
         for (const int daughterId : dstarDaughterIds) {
-          const auto daugther = mc.Particles.rawIteratorAt(daugtherId - mcParticles.offset());
+          const auto daughter = mcParticles.rawIteratorAt(daughterId - mcParticles.offset());
 
           if (std::abs(daughter.pdgCode()) == o2::constants::physics::Pdg::kD0) {
             internalD0Id = daughterId;
@@ -1272,11 +1278,11 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          std::vector<int> independantD0DaughterIds;
+          std::vector<int> independentD0DaughterIds;
 
           const bool matchesIndependentD0Decay = RecoDecay::isMatchedMCGen(mcParticles, genD0, o2::constants::physics::Pdg::kD0, std::array<int, 2>{+kPiPlus, -kKPlus}, true, nullptr, 1, &independentD0DaughterIds);
 
-          if (!matchesIndependantD0Decay) {
+          if (!matchesIndependentD0Decay) {
           continue;
           }
 
@@ -1292,7 +1298,7 @@ struct HfTaskD0Dstar {
 
           std::sort(finalDaughterIds.begin(), finalDaughterIds.end());
 
-          if (std::adjacent_find(finalDaughterIds.begin(), finalDaugterIds.end()) != finalDaughterIds.end()) {
+          if (std::adjacent_find(finalDaughterIds.begin(), finalDaughterIds.end()) != finalDaughterIds.end()) {
             continue;
           }
 
@@ -1314,9 +1320,19 @@ struct HfTaskD0Dstar {
 
           registry.fill(HIST("hTccPairFlowGen"), 6.);
 
+          const double deltaEtaGen = genD0.eta() - genDstar.eta();
+
+          const double deltaPhiGen = RecoDecay::constrainAngle(static_cast<double>(genD0.phi()) - genDstar.phi(), -0.5 * o2::constants::math::PI);
+
+          //D0 and D* momenta and pair observables
+          registry.fill(HIST("hPtD0InSelectedGenPairs"), genD0.pt());
+          registry.fill(HIST("hPtDstarInSelectedGenPairs"), genDstar.pt());
           registry.fill(HIST("hMassD0DstarGen"), fourVectorGenPair.M());
           registry.fill(HIST("hPtD0DstarGen"), fourVectorGenPair.Pt());
           registry.fill(HIST("hMassVsPtD0DstarGen"), fourVectorGenPair.M(), fourVectorGenPair.Pt());
+          registry.fill(HIST("hDeltaEtaGenPairs"), deltaEtaGen);
+          registry.fill(HIST("hDeltaPhiGenPairs"), deltaPhiGen);
+          registry.fill(HIST("hDeltaPhiVsDeltaEtaGenPairs"), deltaEtaGen, deltaPhiGen);
       }
     }
   }
@@ -1332,7 +1348,7 @@ struct HfTaskD0Dstar {
   {
     processMc<aod::hf_cand::VertexerType::DCAFitter, false>(selectedD0CandidatesMc, dstarCandidates, mcParticles, tracks, collisions, mcCollisions, bcs);
   }
-  PROCESS_SWITCH(HfTaskD0Dstar, processMcWithDCAFitterN, "Process MC D0-Dstar pairs with DCAFitterN", true);
+  PROCESS_SWITCH(HfTaskD0Dstar, processMcWithDCAFitterN, "Process MC D0-Dstar pairs with DCAFitterN", false);
 
   void processMcWithDCAFitterNCent(D0CandidatesMc const&,
                                   DstarCandidatesMc const& dstarCandidates,
