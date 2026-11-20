@@ -1,0 +1,39 @@
+{
+  "IsMC": false,
+  "Particle": "D0Dstar",
+
+  "InFileName": "/Users/ml2024/SilasThesis/Masters-Thesis/D0Dstar/work-tcc-genpairs-all-o2env/AnalysisResults.root",
+  "InputHistoName": [
+    "hf-task-d0-dstar/hMassD0DstarGen"
+  ],
+
+  "OutFileName": "/Users/ml2024/SilasThesis/Masters-Thesis/D0Dstar/D0DstarGenMassFit.root",
+
+  "SliceVarName": "sample",
+  "SliceVarUnit": "",
+  "SliceVarMin": [0.0],
+  "SliceVarMax": [1.0],
+
+  "MassMin": 3.90,
+  "MassMax": 10.0,
+  "Rebin": 2
+
+  "PeakMass": 3.95,
+  "PeakSigma": 0.02,
+
+  "BkgFunc": 2,
+  "SgnFunc": 0,
+  "UseLikelihood": true,
+
+  "FixMean": false,
+  "FixSigma": false,
+  "EnableRefl": false,
+  "InclSecPeak": false,
+
+  "WriteSignalPar": true,
+  "DrawBgPrefit": true,
+  "HighlightPeakRegion": true,
+  "NSigmaForSideband": 3.0,
+  "NSigmaForSignal": 3.0,
+  "RandomSeed": 42
+}
