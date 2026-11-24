@@ -362,25 +362,24 @@ struct HfTaskD0Dstar {
     registry.add("hMcGenCounts", "Generated particle counts;category;entries", {HistType::kTH1F, {{3, -0.5, 2.5}}});
     registry.add("hMassGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent mass (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{1000, 0., 10.}}});
     registry.add("hPtGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent #it{p}_{T} (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
-    registry.add("hTccPairFlowGen", "Generated D0-Dstar pair cut flow;Stage;Pairs", {HistType::kTH1D, {{7, 0.5, 7.5}}});
+    registry.add("hTccPairFlowGen", "Generated D0-Dstar pair cut flow;Stage;Pairs", {HistType::kTH1D, {{6, 0.5, 6.5}}});
 
     auto* genPairFlowAxis = registry.get<TH1>(HIST("hTccPairFlowGen"))->GetXaxis();
     genPairFlowAxis->SetBinLabel(1, "Same collision");
-    genPairFlowAxis->SetBinLabel(2, "Both charm combinations");
-    genPairFlowAxis->SetBinLabel(3, "Independent D0");
-    genPairFlowAxis->SetBinLabel(4, "Decay channels");
-    genPairFlowAxis->SetBinLabel(5, "Distinct daughters");
-    genPairFlowAxis->SetBinLabel(6, "Rapidity");
-    genPairFlowAxis->SetBinLabel(7, "Meson eta");
+    genPairFlowAxis->SetBinLabel(2, "Independent D0");
+    genPairFlowAxis->SetBinLabel(3, "Decay channels");
+    genPairFlowAxis->SetBinLabel(4, "Distinct daughters");
+    genPairFlowAxis->SetBinLabel(5, "Rapidity");
+    genPairFlowAxis->SetBinLabel(6, "Meson eta");
 
     registry.add("hMassD0DstarGen", "Selected generated D0-Dstar pairs;#it{M}(D^{0}D*) (GeV/#it{c}^{2});Pairs", {HistType::kTH1D, {{1200, 3.6, 15.6}}});
     registry.add("hPtD0DstarGen", "Selected generated D0-Dstar pairs;#it{p}_{T} (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
     registry.add("hMassVsPtD0DstarGen", "Selected generated D0-Dstar pairs;#it{M}(D^{0}D*) (GeV/#it{c}^{2});#it{p}_{T} (GeV/#it{c})", {HistType::kTH2D, {{1200, 3.6, 15.6}, {200, 0., 100.}}});
     registry.add("hPtD0InSelectedGenPairs", "Independent D0 in selected generated pairs;#it{p}_{T}(D^{0}) (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}}); 
     registry.add("hPtDstarInSelectedGenPairs", "Dstar in selected generated pairs;#it{p}_{T}(D*) (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
-    registry.add("hDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#eta = #eta(D^{0}) - #eta(D*);Pairs", {HistType::kTH1D, {{200, -5., 5.}}});
+    registry.add("hDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#eta = #eta(D^{0}) - #eta(D*);Pairs", {HistType::kTH1D, {{200, -2., 2.}}});
     registry.add("hDeltaPhiGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi = #varphi(D^{0}) - #varphi(D*) (rad);Pairs", {HistType::kTH1D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}}});
-    registry.add("hDeltaPhiVsDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi (rad); #Delta#eta;", {HistType::kTH2D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}, {200, -5., 5.}}});
+    registry.add("hDeltaPhiVsDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi (rad); #Delta#eta;", {HistType::kTH2D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}, {200, -2., 2.}}});
 
     registry.add("hGenPairUniqueness", "Selected generated pairs: repeated row-pair check;Category;Pairs",{HistType::kTH1D, {{2, 0.5, 2.5}}});
 
@@ -1215,6 +1214,13 @@ struct HfTaskD0Dstar {
     }
 
     //Loop over generated D*
+    struct GenD0DecayInfo {
+      bool matched = false;
+      std::vector<int> daughterIds;
+    };
+
+    // Local to this processMc call: MC indices can restart next dataframe.
+    std::unordered_map<int64_t, GenD0DecayInfo> genD0DecayCache;
     for (const auto& genDstar : mcParticles) {
       if (std::abs(genDstar.pdgCode()) != o2::constants::physics::Pdg::kDStar) {
         continue;
@@ -1225,8 +1231,6 @@ struct HfTaskD0Dstar {
       if (collisionIt == genD0IdsByCollision.end()) {
         continue;
       }
-
-      const int expectedSign = genDstar.pdgCode() > 0 ? 1 : -1;
 
       //Check Dstar -> D0 pi and get its daugthers
       std::vector<int> dstarDaughterIds;
@@ -1260,6 +1264,10 @@ struct HfTaskD0Dstar {
                                     std::array<int, 2>{+kPiPlus, -kKPlus}, true, nullptr, 1, &internalD0DaughterIds);
         }
 
+        //Construct Dstar 4-momentum once outside loop to save computing time
+        const ROOT::Math::PxPyPzEVector fourVectorGenDstar(
+            genDstar.px(), genDstar.py(), genDstar.pz(), genDstar.e());
+
         //Pair with every generated D0 in the same MC collision
         for (const int64_t genD0Id : collisionIt->second) {
           const auto genD0 = mcParticles.rawIteratorAt(genD0Id - mcParticles.offset());
@@ -1267,10 +1275,7 @@ struct HfTaskD0Dstar {
           //Stage 1: same collision mesons
           registry.fill(HIST("hTccPairFlowGen"), 1.);
 
-          // Stage 2: accept both D0 and anti-D0 with either Dstar charge.
-          registry.fill(HIST("hTccPairFlowGen"), 2.);
-
-          //Stage 3: exclude Dstar's own direct D0 daugther
+          //Stage 2: exclude Dstar's own direct D0 daugther
           bool isDstarDaughter = false;
 
           for (const auto motherId : genD0.mothersIds()) {
@@ -1284,24 +1289,36 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 3.);
+          registry.fill(HIST("hTccPairFlowGen"), 2.);
 
-          //Stage 4: require full decay chain
+          //Stage 3: require full decay chain
           if (!matchesDstarDecay || !matchesInternalD0Decay) {
             continue;
           }
 
-          std::vector<int> independentD0DaughterIds;
+          auto [decayIt, inserted] = genD0DecayCache.try_emplace(genD0.globalIndex());
 
-          const bool matchesIndependentD0Decay = RecoDecay::isMatchedMCGen(mcParticles, genD0, o2::constants::physics::Pdg::kD0, std::array<int, 2>{+kPiPlus, -kKPlus}, true, nullptr, 1, &independentD0DaughterIds);
+          auto& decayInfo = decayIt->second;
 
-          if (!matchesIndependentD0Decay) {
-          continue;
+          // Evaluate this D0's decay only on its first encounter.
+          // Failed matches are cached too.
+          if (inserted) {
+            decayInfo.matched = RecoDecay::isMatchedMCGen(
+              mcParticles, genD0,
+              o2::constants::physics::Pdg::kD0,
+              std::array<int, 2>{+kPiPlus, -kKPlus},
+              true, nullptr, 1, &decayInfo.daughterIds);
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 4.);
+          if (!decayInfo.matched) {
+            continue;
+          }
 
-          //Stage 5: check no shared-track selection
+          const auto& independentD0DaughterIds = decayInfo.daughterIds;
+
+          registry.fill(HIST("hTccPairFlowGen"), 3.);
+
+          //Stage 4: check no shared-track selection
           std::array<int, 5> finalDaughterIds{
             independentD0DaughterIds[0],
             independentD0DaughterIds[1],
@@ -1315,25 +1332,22 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 5.);
+          registry.fill(HIST("hTccPairFlowGen"), 4.);
 
           //construct the pair from generated momenta and energies
           const ROOT::Math::PxPyPzEVector fourVectorGenD0(
             genD0.px(), genD0.py(), genD0.pz(), genD0.e());
 
-          const ROOT::Math::PxPyPzEVector fourVectorGenDstar(
-            genDstar.px(), genDstar.py(), genDstar.pz(), genDstar.e());
-
           const auto fourVectorGenPair = fourVectorGenD0 + fourVectorGenDstar;
 
-          //Stage 6: generated pair rapidity selection
+          //Stage 5: generated pair rapidity selection
           if (yTccGenMax >= 0. && std::abs(fourVectorGenPair.Rapidity()) > yTccGenMax) {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 6.);
+          registry.fill(HIST("hTccPairFlowGen"), 5.);
 
-          // Stage 7: both generated mesons inside the eta acceptance.
+          // Stage 6: both generated mesons inside the eta acceptance.
           const double etaD0 = genD0.eta();
           const double etaDstar = genDstar.eta();
 
@@ -1345,7 +1359,7 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 7.);
+          registry.fill(HIST("hTccPairFlowGen"), 6.);
 
           // Diagnose repeated fills of the exact same generated meson pair.
           const std::pair<int64_t, int64_t> pairKey{genD0.globalIndex(), genDstar.globalIndex()};

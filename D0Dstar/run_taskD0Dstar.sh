@@ -1,41 +1,36 @@
-
 #!/usr/bin/env bash
-# Run 3 MC, DCAFitterN, no PV refit, no reconstructed-centrality selection.
-# Uses the existing O2Physics 834e08f85f development build.
+# Run 3 MC, DCAFitterN, no PV refit.
+# Full output goes to run.log; terminal shows reader progress.
 #
-# Before running, enter:
-#   alienv enter ninja/latest-834e08f85f-o2
+# Before running:
+# alienv enter O2/latest-834e08f85f-o2,JAliEn-ROOT/latest-834e08f85f-o2
 
 set -euo pipefail
 
 # ------------------------------------------------------------
-# O2Physics development build setup
+# O2Physics development build
 # ------------------------------------------------------------
 
 ALICE_DIR="$HOME/SilasThesis/Masters-Thesis/alice"
-
 O2PHYSICS_BUILD="$ALICE_DIR/sw/BUILD/O2Physics-latest-834e08f85f/O2Physics"
 
-# Check that the compiled O2Physics executables exist.
 if [[ ! -d "$O2PHYSICS_BUILD/stage/bin" ]]; then
-  echo "ERROR: O2Physics build directory not found:"
-  echo "$O2PHYSICS_BUILD/stage/bin"
+  printf 'ERROR: Build directory not found: %s\n' \
+    "$O2PHYSICS_BUILD/stage/bin" >&2
   exit 1
 fi
 
-# Make the executables available to this script.
 export PATH="$O2PHYSICS_BUILD/stage/bin:$PATH"
-
-echo "Using O2Physics build:"
-echo "$O2PHYSICS_BUILD"
 
 # ------------------------------------------------------------
 # Input and configuration
 # ------------------------------------------------------------
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 INPUT_FILE="${INPUT_FILE:-@$SCRIPT_DIR/input_files.txt}"
 CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/config_test.json}"
+WORK_DIR="${WORK_DIR:-$SCRIPT_DIR/work-mc}"
 
 INPUT_PATH="$INPUT_FILE"
 input_is_list=0
@@ -61,18 +56,6 @@ else
   INPUT_FILE="$INPUT_PATH"
 fi
 
-WORK_DIR="${WORK_DIR:-$SCRIPT_DIR/work-mc}"
-
-# ------------------------------------------------------------
-# Optional AOD converters
-# ------------------------------------------------------------
-
-# Only add converters required by the TABLE VERSIONS
-# in this particular AO2D.
-#
-# Example:
-# AOD_CONVERTERS='o2-analysis-mc-converter o2-analysis-mccollision-converter o2-analysis-tracks-extra-v002-converter'
-
 # ------------------------------------------------------------
 # Analysis pipeline
 # ------------------------------------------------------------
@@ -96,6 +79,10 @@ stages=(
   o2-analysis-hf-task-d0-dstar
 )
 
+# Only enable converters required by your AO2D table versions.
+# Example:
+# AOD_CONVERTERS='o2-analysis-mc-converter o2-analysis-mccollision-converter o2-analysis-tracks-extra-v002-converter'
+
 converter_list="${AOD_CONVERTERS:-}"
 
 if [[ -n "${converter_list//[[:space:]]/}" ]]; then
@@ -104,7 +91,7 @@ if [[ -n "${converter_list//[[:space:]]/}" ]]; then
 fi
 
 # ------------------------------------------------------------
-# Verify executables
+# Verify executables and inputs
 # ------------------------------------------------------------
 
 missing=0
@@ -117,15 +104,11 @@ for stage in "${stages[@]}"; do
 done
 
 if (( missing )); then
-  echo "ERROR: Some O2Physics executables are missing." >&2
-  echo "Enter the matching Ninja environment:" >&2
-  echo "alienv enter ninja/latest-834e08f85f-o2" >&2
+  printf '%s\n' \
+    'Load the compatible O2 runtime environment before running.' \
+    'alienv enter O2/latest-834e08f85f-o2,JAliEn-ROOT/latest-834e08f85f-o2' >&2
   exit 127
 fi
-
-# ------------------------------------------------------------
-# Verify input files
-# ------------------------------------------------------------
 
 [[ -r "$INPUT_PATH" ]] || {
   printf 'Input is not readable: %s\n' "$INPUT_PATH" >&2
@@ -138,16 +121,64 @@ fi
 }
 
 # ------------------------------------------------------------
-# Working directory and logging
+# Working directory, full log and terminal progress
 # ------------------------------------------------------------
 
 mkdir -p -- "$WORK_DIR"
 cd -- "$WORK_DIR"
 
-exec > >(tee run.log) 2>&1
+exec > >(
+  tee run.log | awk \
+    -v input="$INPUT_PATH" \
+    -v is_list="$input_is_list" \
+    -v log_path="$PWD/run.log" '
+    BEGIN {
+      if (is_list) {
+        while ((getline path < input) > 0) {
+          sub(/\r$/, "", path)
+          if (path !~ /^[[:space:]]*$/ && path !~ /^[[:space:]]*#/)
+            wanted[path] = 1
+        }
+        close(input)
+      } else {
+        wanted[input] = 1
+      }
+
+      for (path in wanted) total++
+      printf "AO2D reader: 0/%d files", total
+      fflush()
+    }
+
+    /Read info:.*lfn=/ {
+      path = $0
+      sub(/^.*Read info:.*lfn=/, "", path)
+      sub(/,.*/, "", path)
+
+      if ((path in wanted) && !(path in seen)) {
+        seen[path] = 1
+        count++
+        printf "\rAO2D reader: %d/%d files", count, total
+        fflush()
+      }
+    }
+
+    /^TCC_RUN_FINISHED=/ {
+      split($0, status, "=")
+
+      if (status[2] == 0)
+        printf "\nWorkflow completed successfully.\n"
+      else
+        printf "\nWorkflow failed (exit code %s).\n", status[2]
+
+      printf "Full log: %s\n", log_path
+      fflush()
+    }
+  '
+) 2>&1
 
 args=(--configuration "json://$CONFIG_FILE" -b)
 
+# These details are saved in run.log.
 printf 'Input: %s\n' "$INPUT_FILE"
 printf 'Configuration: %s\n' "$CONFIG_FILE"
 printf 'Working directory: %s\n' "$PWD"
@@ -159,25 +190,26 @@ printf 'Workflow: %s\n' "${stages[*]}"
 # ------------------------------------------------------------
 
 # The stdout pipes compose DPL workflow specifications.
-# The final executable launches the combined graph and
-# supplies the AO2D reader options once.
+# Only the final executable receives the AO2D reader options.
 
 run_stage() {
   local index="$1"
 
   if (( index == ${#stages[@]} - 1 )); then
-
     "${stages[index]}" "${args[@]}" --run --aod-file "$INPUT_FILE" \
       --shm-segment-size 4000000000 \
       --aod-memory-rate-limit 1000000000 \
       "${@:2}"
-
   else
-
     "${stages[index]}" "${args[@]}" |
       run_stage "$((index + 1))" "${@:2}"
-
   fi
 }
 
-run_stage 0 "$@"
+if run_stage 0 "$@"; then
+  printf 'TCC_RUN_FINISHED=0\n'
+else
+  run_status=$?
+  printf 'TCC_RUN_FINISHED=%s\n' "$run_status"
+  exit "$run_status"
+fi
