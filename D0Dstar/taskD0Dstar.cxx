@@ -64,6 +64,8 @@
 #include <unordered_map>
 #include <vector>
 #include <Math/Vector4D.h>
+#include <set>
+#include <utility>
 
 using namespace o2;
 using namespace o2::analysis;
@@ -101,6 +103,7 @@ struct HfTaskD0Dstar {
   Configurable<double> yCandRecoMax{"yCandRecoMax", 0.8, "max. cand. rapidity"};
   Configurable<double> yTccRecoMax{"yTccRecoMax", 0.8, "Maximum absolute reconstructed D0-D* pair rapidity; negative disables cut"};
   Configurable<double> yTccGenMax{"yTccGenMax", 0.8, "Maximum absolute generated D0-Dstar pair rapidity; negative disables cut"};
+  Configurable<double> etaGenMesonMax{"etaGenMesonMax", 0.8, "Maximum absolute eta of each generated D0 and Dstar; negative disables cut"};
   Configurable<int> selectionFlagHf{"selectionFlagHf", 1, "Selection Flag for HF flagged candidates"};
   Configurable<int> selectionTopol{"selectionTopol", 1, "Selection Flag for topologically selected candidates"};
   Configurable<int> selectionCand{"selectionCand", 1, "Selection Flag for conj. topol. selected candidates"};
@@ -345,6 +348,9 @@ struct HfTaskD0Dstar {
     registry.add("hDecLengthVsPtSig", "2-prong candidates;decay length (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     registry.add("hDecLengthxyVsPtSig", "2-prong candidates;decay length xy (cm) vs #it{p}_{T} for signal;entries", {HistType::kTH2F, {{800, 0., 4.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     //New plots Silas
+    registry.add("hCollisionsData", "Input collisions in processData;Counter;Collisions", {HistType::kTH1D, {{1, -0.5, 0.5}}});
+    registry.add("hCollisionsMcReco", "Input reconstructed collisions in processMc;Counter;Collisions", {HistType::kTH1D, {{1, -0.5, 0.5}}});
+    registry.add("hCollisionsMcGen", "Input generated collisions in processMc;Counter;Collisions", {HistType::kTH1D, {{1, -0.5, 0.5}}});
     registry.add("hMassTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{600, 3.6, 4.2}}});
     registry.add("hPtTcc", "Selected D0-D* pairs; #it{p}_{T}(D^{0}D*) (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
     registry.add("hMassVsPtTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});" "#it{p}_{T}(D^{0}D*) (GeV/#it{c})", {HistType::kTH2F, {{600, 3.6, 4.2}, {200, 0., 100.}}});
@@ -356,7 +362,7 @@ struct HfTaskD0Dstar {
     registry.add("hMcGenCounts", "Generated particle counts;category;entries", {HistType::kTH1F, {{3, -0.5, 2.5}}});
     registry.add("hMassGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent mass (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{1000, 0., 10.}}});
     registry.add("hPtGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent #it{p}_{T} (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
-    registry.add("hTccPairFlowGen", "Generated D0-Dstar pair cut flow;Stage;Pairs", {HistType::kTH1D, {{6, 0.5, 6.5}}});
+    registry.add("hTccPairFlowGen", "Generated D0-Dstar pair cut flow;Stage;Pairs", {HistType::kTH1D, {{7, 0.5, 7.5}}});
 
     auto* genPairFlowAxis = registry.get<TH1>(HIST("hTccPairFlowGen"))->GetXaxis();
     genPairFlowAxis->SetBinLabel(1, "Same collision");
@@ -365,6 +371,7 @@ struct HfTaskD0Dstar {
     genPairFlowAxis->SetBinLabel(4, "Decay channels");
     genPairFlowAxis->SetBinLabel(5, "Distinct daughters");
     genPairFlowAxis->SetBinLabel(6, "Rapidity");
+    genPairFlowAxis->SetBinLabel(7, "Meson eta");
 
     registry.add("hMassD0DstarGen", "Selected generated D0-Dstar pairs;#it{M}(D^{0}D*) (GeV/#it{c}^{2});Pairs", {HistType::kTH1D, {{1200, 3.6, 15.6}}});
     registry.add("hPtD0DstarGen", "Selected generated D0-Dstar pairs;#it{p}_{T} (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
@@ -373,8 +380,13 @@ struct HfTaskD0Dstar {
     registry.add("hPtDstarInSelectedGenPairs", "Dstar in selected generated pairs;#it{p}_{T}(D*) (GeV/#it{c});Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
     registry.add("hDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#eta = #eta(D^{0}) - #eta(D*);Pairs", {HistType::kTH1D, {{200, -5., 5.}}});
     registry.add("hDeltaPhiGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi = #varphi(D^{0}) - #varphi(D*) (rad);Pairs", {HistType::kTH1D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}}});
-    registry.add("hDeltaPhiVsDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#eta;#Delta#varphi (rad)", {HistType::kTH2D, {{200, -5., 5.}, {64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}}});
+    registry.add("hDeltaPhiVsDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi (rad); #Delta#eta;", {HistType::kTH2D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}, {200, -5., 5.}}});
 
+    registry.add("hGenPairUniqueness", "Selected generated pairs: repeated row-pair check;Category;Pairs",{HistType::kTH1D, {{2, 0.5, 2.5}}});
+
+    auto* uniquenessAxis = registry.get<TH1>(HIST("hGenPairUniqueness"))->GetXaxis();
+    uniquenessAxis->SetBinLabel(1, "First occurrence");
+    uniquenessAxis->SetBinLabel(2, "Repeated pair");
 
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
     const AxisSpec thnAxisPt{thnConfigAxisPt, "#it{p}_{T} (GeV/#it{c})"};
@@ -583,13 +595,14 @@ struct HfTaskD0Dstar {
   template <int ReconstructionType, bool ApplyMl, typename D0CandType, typename DstarCandType, typename CollType, typename BCsType>
   void processData(D0CandType const& d0Candidates,
                    DstarCandType const& dstarCandidates,
-                   CollType const&,
+                   CollType const& collisions,
                    aod::TracksWExtra const&,
                    BCsType const&)
   {
     registry.fill(HIST("hTccInputs"), 0.);
     registry.fill(HIST("hTccInputs"), 1., static_cast<double>(d0Candidates.size()));
     registry.fill(HIST("hTccInputs"), 2., static_cast<double>(dstarCandidates.size()));
+    registry.fill(HIST("hCollisionsData"), 0., static_cast<double>(collisions.size()));
     //Dstar Loop, first because its rarer
     for (const auto& dstar : dstarCandidates) {
 
@@ -997,6 +1010,8 @@ struct HfTaskD0Dstar {
                  BCsType const& bcs)
   {
     //Reconstructed level
+    registry.fill(HIST("hCollisionsMcReco"), 0., static_cast<double>(collisions.size()));
+    registry.fill(HIST("hCollisionsMcGen"), 0., static_cast<double>(mcCollisions.size()));
     for (const auto& dstar : dstarCandidates) {
 
       //Check Dstar -> D0 pi candidate flag
@@ -1181,6 +1196,8 @@ struct HfTaskD0Dstar {
       LOGP(info, "Generated D0-Dstar parent: PDG={}, mass={}, pT={}", particle.pdgCode(), fourVectorParent.M(), fourVectorParent.Pt());  
     }
      
+    // Local to this processMc call, shared across all generated-pair iterations.
+    std::set<std::pair<int64_t, int64_t>> seenSelectedGenPairs;
     //Generated D0 D* pairs without common parent
 
     std::unordered_map<int64_t, std::vector<int64_t>> genD0IdsByCollision;
@@ -1319,6 +1336,27 @@ struct HfTaskD0Dstar {
           }
 
           registry.fill(HIST("hTccPairFlowGen"), 6.);
+
+          // Stage 7: both generated mesons inside the eta acceptance.
+          const double etaD0 = genD0.eta();
+          const double etaDstar = genDstar.eta();
+
+          if (!std::isfinite(etaD0) || !std::isfinite(etaDstar)) {
+            continue;
+          }
+
+          if (etaGenMesonMax >= 0. && (std::abs(etaD0) >= etaGenMesonMax || std::abs(etaDstar) >= etaGenMesonMax)) {
+            continue;
+          }
+
+          registry.fill(HIST("hTccPairFlowGen"), 7.);
+
+          // Diagnose repeated fills of the exact same generated meson pair.
+          const std::pair<int64_t, int64_t> pairKey{genD0.globalIndex(), genDstar.globalIndex()};
+
+          const bool firstOccurrence = seenSelectedGenPairs.insert(pairKey).second;
+
+          registry.fill(HIST("hGenPairUniqueness"), firstOccurrence ? 1. : 2.);
 
           const double deltaEtaGen = genD0.eta() - genDstar.eta();
 
