@@ -1,7 +1,7 @@
 {
     "internal-dpl-clock": "",
     "internal-dpl-aod-reader": {
-        "aod-file-private": "@\/Users\/ml2024\/SilasThesis\/Masters-Thesis\/D0Dstar\/input_files.txt",
+        "aod-file-private": "\/Users\/ml2024\/SilasThesis\/Masters-Thesis\/data\/002\/AO2D.root",
         "aod-max-io-rate": "0",
         "time-limit": "0",
         "orbit-offset-enumeration": "0",
@@ -4154,6 +4154,7 @@
         "yCandRecoMax": "0.80000000000000004",
         "yTccRecoMax": "0.80000000000000004",
         "yTccGenMax": "0.80000000000000004",
+        "etaGenMesonMax": "0.80000000000000004",
         "selectionFlagHf": "1",
         "selectionTopol": "1",
         "selectionCand": "1",
