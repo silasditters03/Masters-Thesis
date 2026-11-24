@@ -388,6 +388,15 @@ struct HfTaskD0Dstar {
     uniquenessAxis->SetBinLabel(1, "First occurrence");
     uniquenessAxis->SetBinLabel(2, "Repeated pair");
 
+    registry.add("hPtD0InSelectedGenPairsOppositeCharm", "D0 in selected opposite-charm generated pairs;p_{T}(D^{0}) (GeV/c);Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
+    registry.add("hPtDstarInSelectedGenPairsOppositeCharm", "Dstar in selected opposite-charm generated pairs;p_{T}(D*) (GeV/c);Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
+    registry.add("hMassD0DstarGenOppositeCharm", "Selected opposite-charm generated pairs;M(D^{0}D*) (GeV/c^{2});Pairs", {HistType::kTH1D, {{1200, 3.6, 15.6}}});
+    registry.add("hPtD0DstarGenOppositeCharm", "Selected opposite-charm generated pairs;p_{T}(D^{0}D*) (GeV/c);Pairs", {HistType::kTH1D, {{200, 0., 100.}}});
+    registry.add("hMassVsPtD0DstarGenOppositeCharm", "Selected opposite-charm generated pairs;M(D^{0}D*) (GeV/c^{2});p_{T}(D^{0}D*) (GeV/c)", {HistType::kTH2D, {{1200, 3.6, 15.6}, {200, 0., 100.}}});
+    registry.add("hDeltaPhiGenPairsOppositeCharm", "Selected opposite-charm generated D0-Dstar pairs;#Delta#varphi = #varphi(D^{0}) - #varphi(D*) (rad);Pairs",{HistType::kTH1D,{{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}}});
+    registry.add("hDeltaEtaGenPairsOppositeCharm", "Selected opposite-charm generated pairs;#Delta#eta = #eta(D^{0}) - #eta(D*);Pairs", {HistType::kTH1D, {{200, -5., 5.}}});
+    registry.add("hDeltaPhiVsDeltaEtaGenPairsOppositeCharm", "Selected opposite-charm generated pairs;#Delta#varphi (rad);#Delta#eta", {HistType::kTH2D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}, {200, -5., 5.}}});
+
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
     const AxisSpec thnAxisPt{thnConfigAxisPt, "#it{p}_{T} (GeV/#it{c})"};
     const AxisSpec thnAxisPtB{thnConfigAxisPtB, "#it{p}_{T}^{B} (GeV/#it{c})"};
@@ -1267,12 +1276,20 @@ struct HfTaskD0Dstar {
           //Stage 1: same collision mesons
           registry.fill(HIST("hTccPairFlowGen"), 1.);
 
-          //Stage 2: D0 D*+ or anti-D0 D*-
-          if (genD0.pdgCode() != expectedSign * o2::constants::physics::Pdg::kD0) {
+          const bool isSameCharm = genD0.pdgCode() == expectedSign * o2::constants::physics::Pdg::kD0;
+          const bool isOppositeCharm = genD0.pdgCode() == -expectedSign * o2::constants::physics::Pdg::kD0;
+
+          if (!isSameCharm && !isOppositeCharm) {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 2.);
+          const auto fillSameCharmFlow = [&](double stage) {
+            if (isSameCharm){
+              registry.fill(HIST("hTccPairFlowGen"), stage);
+            }
+          };
+
+          fillSameCharmFlow(2.);
 
           //Stage 3: exclude Dstar's own direct D0 daugther
           bool isDstarDaughter = false;
@@ -1288,7 +1305,7 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 3.);
+          fillSameCharmFlow(3.);
 
           //Stage 4: require full decay chain
           if (!matchesDstarDecay || !matchesInternalD0Decay) {
@@ -1303,7 +1320,7 @@ struct HfTaskD0Dstar {
           continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 4.);
+          fillSameCharmFlow(4.);
 
           //Stage 5: check no shared-track selection
           std::array<int, 5> finalDaughterIds{
@@ -1319,7 +1336,7 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 5.);
+          fillSameCharmFlow(5.);
 
           //construct the pair from generated momenta and energies
           const ROOT::Math::PxPyPzEVector fourVectorGenD0(
@@ -1335,7 +1352,7 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 6.);
+          fillSameCharmFlow(6.);
 
           // Stage 7: both generated mesons inside the eta acceptance.
           const double etaD0 = genD0.eta();
@@ -1349,28 +1366,42 @@ struct HfTaskD0Dstar {
             continue;
           }
 
-          registry.fill(HIST("hTccPairFlowGen"), 7.);
+          fillSameCharmFlow(7.);
 
           // Diagnose repeated fills of the exact same generated meson pair.
-          const std::pair<int64_t, int64_t> pairKey{genD0.globalIndex(), genDstar.globalIndex()};
+          if (isSameCharm) {
+            const std::pair<int64_t, int64_t> pairKey{genD0.globalIndex(), genDstar.globalIndex()};
 
-          const bool firstOccurrence = seenSelectedGenPairs.insert(pairKey).second;
+            const bool firstOccurrence = seenSelectedGenPairs.insert(pairKey).second;
 
-          registry.fill(HIST("hGenPairUniqueness"), firstOccurrence ? 1. : 2.);
+            registry.fill(HIST("hGenPairUniqueness"), firstOccurrence ? 1. : 2.);
+          }
+          
 
           const double deltaEtaGen = genD0.eta() - genDstar.eta();
 
           const double deltaPhiGen = RecoDecay::constrainAngle(static_cast<double>(genD0.phi()) - genDstar.phi(), -0.5 * o2::constants::math::PI);
 
           //D0 and D* momenta and pair observables
-          registry.fill(HIST("hPtD0InSelectedGenPairs"), genD0.pt());
-          registry.fill(HIST("hPtDstarInSelectedGenPairs"), genDstar.pt());
-          registry.fill(HIST("hMassD0DstarGen"), fourVectorGenPair.M());
-          registry.fill(HIST("hPtD0DstarGen"), fourVectorGenPair.Pt());
-          registry.fill(HIST("hMassVsPtD0DstarGen"), fourVectorGenPair.M(), fourVectorGenPair.Pt());
-          registry.fill(HIST("hDeltaEtaGenPairs"), deltaEtaGen);
-          registry.fill(HIST("hDeltaPhiGenPairs"), deltaPhiGen);
-          registry.fill(HIST("hDeltaPhiVsDeltaEtaGenPairs"), deltaEtaGen, deltaPhiGen);
+          if (isSameCharm) {
+            registry.fill(HIST("hPtD0InSelectedGenPairs"), genD0.pt());
+            registry.fill(HIST("hPtDstarInSelectedGenPairs"), genDstar.pt());
+            registry.fill(HIST("hMassD0DstarGen"), fourVectorGenPair.M());
+            registry.fill(HIST("hPtD0DstarGen"), fourVectorGenPair.Pt());
+            registry.fill(HIST("hMassVsPtD0DstarGen"),fourVectorGenPair.M(), fourVectorGenPair.Pt());
+            registry.fill(HIST("hDeltaEtaGenPairs"), deltaEtaGen);
+            registry.fill(HIST("hDeltaPhiGenPairs"), deltaPhiGen);
+            registry.fill(HIST("hDeltaPhiVsDeltaEtaGenPairs"),deltaPhiGen, deltaEtaGen);
+                    } else if (isOppositeCharm) {
+            registry.fill(HIST("hPtD0InSelectedGenPairsOppositeCharm"), genD0.pt());
+            registry.fill(HIST("hPtDstarInSelectedGenPairsOppositeCharm"), genDstar.pt());
+            registry.fill(HIST("hMassD0DstarGenOppositeCharm"), fourVectorGenPair.M());
+            registry.fill(HIST("hPtD0DstarGenOppositeCharm"), fourVectorGenPair.Pt());
+            registry.fill(HIST("hMassVsPtD0DstarGenOppositeCharm"), fourVectorGenPair.M(), fourVectorGenPair.Pt());
+            registry.fill(HIST("hDeltaEtaGenPairsOppositeCharm"), deltaEtaGen);
+            registry.fill(HIST("hDeltaPhiGenPairsOppositeCharm"), deltaPhiGen);
+            registry.fill(HIST("hDeltaPhiVsDeltaEtaGenPairsOppositeCharm"), deltaPhiGen, deltaEtaGen);
+          }
       }
     }
   }

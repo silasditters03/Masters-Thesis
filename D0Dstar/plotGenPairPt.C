@@ -11,7 +11,7 @@ void plotGenPairPt()
 {
   const char* input =
     "/Users/ml2024/SilasThesis/Masters-Thesis/D0Dstar/"
-    "work-tcc-angular-all/AnalysisResults.root";
+    "work-tcc-eta-all/AnalysisResults.root";
 
   const char* output =
     "/Users/ml2024/SilasThesis/Masters-Thesis/D0Dstar/"
@@ -82,6 +82,55 @@ void plotGenPairPt()
   }
 
   legend->Draw();
+
+  // Delta phi with statistical error bars.
+  TH1* sourceDeltaPhi = nullptr;
+  file->GetObject(
+    "hf-task-d0-dstar/hDeltaPhiGenPairs", sourceDeltaPhi);
+
+  if (!sourceDeltaPhi) {
+    std::cerr << "Missing histogram: hDeltaPhiGenPairs\n";
+    return;
+  }
+
+  auto* hDeltaPhi =
+    static_cast<TH1*>(sourceDeltaPhi->Clone("deltaPhiPlot"));
+  hDeltaPhi->SetDirectory(nullptr);
+
+  // Keep the original binning. Set to 4 for 16 bins instead of 64.
+  const int deltaPhiRebin = 1;
+  if (deltaPhiRebin > 1) {
+    hDeltaPhi->Rebin(deltaPhiRebin);
+  }
+
+  hDeltaPhi->SetStats(false);
+  hDeltaPhi->SetTitle(
+    "Selected generated D^{0}-D^{*} pairs;"
+    "#Delta#varphi = #varphi(D^{0}) - #varphi(D*) (rad);"
+    "Pairs / bin");
+  hDeltaPhi->SetLineColor(kBlue + 1);
+  hDeltaPhi->SetMarkerColor(kBlue + 1);
+  hDeltaPhi->SetMarkerStyle(20);
+  hDeltaPhi->SetMarkerSize(0.8);
+  hDeltaPhi->SetMinimum(0.);
+
+  double deltaPhiMaximum = 0.;
+  for (int bin = 1; bin <= hDeltaPhi->GetNbinsX(); ++bin) {
+    deltaPhiMaximum = std::max(
+      deltaPhiMaximum,
+      hDeltaPhi->GetBinContent(bin) + hDeltaPhi->GetBinError(bin));
+  }
+  hDeltaPhi->SetMaximum(
+    deltaPhiMaximum > 0. ? 1.2 * deltaPhiMaximum : 1.);
+
+  auto* canvasDeltaPhi =
+    new TCanvas("cGenPairDeltaPhi", "Generated pair delta phi", 950, 700);
+  canvasDeltaPhi->SetLeftMargin(0.13);
+  canvasDeltaPhi->SetBottomMargin(0.13);
+  canvasDeltaPhi->SetTicks(1, 1);
+
+  hDeltaPhi->Draw("E1");
+
   TFile outputFile(output, "UPDATE");
   if (outputFile.IsZombie()) {
     std::cerr << "Cannot open output file: " << output << '\n';
@@ -98,6 +147,8 @@ void plotGenPairPt()
     histograms[i]->Write(names[i], TObject::kOverwrite);
   }
 
+  canvasDeltaPhi->Write("cGenPairDeltaPhi", TObject::kOverwrite);
+  hDeltaPhi->Write("hDeltaPhiGenPairs", TObject::kOverwrite);
   outputFile.Close();
 
   std::cout << "Saved: " << output << '\n';
