@@ -273,6 +273,17 @@ struct HfTaskD0Dstar {
     registry.add("hDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#eta = #eta(D^{0}) - #eta(D*);Pairs", {HistType::kTH1D, {{200, -2., 2.}}});
     registry.add("hDeltaPhiGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi = #varphi(D^{0}) - #varphi(D*) (rad);Pairs", {HistType::kTH1D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}}});
     registry.add("hDeltaPhiVsDeltaEtaGenPairs", "Selected generated D0-Dstar pairs;#Delta#varphi (rad); #Delta#eta;", {HistType::kTH2D, {{64, -0.5 * o2::constants::math::PI, 1.5 * o2::constants::math::PI}, {200, -2., 2.}}});
+    registry.add("hTccPairFlowMc", "Reconstructed MC selection flow;Stage;Count", {HistType::kTH1D, {{8, 0.5, 8.5}}});
+
+    auto* recoFlowAxis = registry.get<TH1>(HIST("hTccPairFlowMc"))->GetXaxis();
+    recoFlowAxis->SetBinLabel(1, "Dstar input");
+    recoFlowAxis->SetBinLabel(2, "Dstar selected");
+    recoFlowAxis->SetBinLabel(3, "Soft-pion charge");
+    recoFlowAxis->SetBinLabel(4, "Same-collision pairs");
+    recoFlowAxis->SetBinLabel(5, "D0 decay flag");
+    recoFlowAxis->SetBinLabel(6, "D0 selection");
+    recoFlowAxis->SetBinLabel(7, "Distinct tracks");
+    recoFlowAxis->SetBinLabel(8, "Rapidity hypotheses");
     
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
     const AxisSpec thnAxisPt{thnConfigAxisPt, "#it{p}_{T} (GeV/#it{c})"};
@@ -899,17 +910,20 @@ struct HfTaskD0Dstar {
     registry.fill(HIST("hCollisionsMcReco"), 0., static_cast<double>(collisions.size()));
     registry.fill(HIST("hCollisionsMcGen"), 0., static_cast<double>(mcCollisions.size()));
     for (const auto& dstar : dstarCandidates) {
+      registry.fill(HIST("hTccPairFlowMc"), 0.);
 
       //Check Dstar -> D0 pi candidate flag
       if (!dstar.isSelDstarToD0Pi()) {
         continue;
       }
+      registry.fill(HIST("hTccPairFlowMc"), 1.);  
 
       //Check if there is a proper soft pion
       const auto softPiSign = dstar.signSoftPi();
       if (softPiSign == 0) {
         continue;
       }
+      registry.fill(HIST("hTccPairFlowMc"), 2.);
 
       const int expectedDstarSign = softPiSign > 0 ? 1 : -1;
 
@@ -923,11 +937,13 @@ struct HfTaskD0Dstar {
       const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
 
       for (const auto& d0 : d0s) {
+        registry.fill(HIST("hTccPairFlowMc"), 3.);
         
         //Check if D0 -> K Pi flag is satisfied
         if (!(d0.hfflag() & (1 << aod::hf_cand_2prong::DecayType::D0ToPiK))) {
           continue;
         }
+        registry.fill(HIST("hTccPairFlowMc"), 4.);
 
         const bool passesD0 = d0.isSelD0() >= selectionFlagD0;
         const bool passesD0bar = d0.isSelD0bar() >= selectionFlagD0bar;
@@ -935,6 +951,7 @@ struct HfTaskD0Dstar {
         if (!passesD0 && !passesD0bar) {
           continue;
         }
+        registry.fill(HIST("hTccPairFlowMc"), 5.);
 
         // Reject shared tracks.
         if (d0.prong0Id() == dstar.prong0Id() ||
@@ -945,6 +962,7 @@ struct HfTaskD0Dstar {
             d0.prong1Id() == dstar.prongPiId()) {
           continue;
         }
+        registry.fill(HIST("hTccPairFlowMc"), 6.);
 
         //Reconstructed constituent masses
         const auto pD0 = d0.pVector();
@@ -973,6 +991,7 @@ struct HfTaskD0Dstar {
           if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax) {
             continue;
           }
+          registry.fill(HIST("hTccPairFlowMc"), 7.);
 
           //Inclusive reconstructed pairs
           registry.fill(HIST("hMassTcc"), massTcc);
