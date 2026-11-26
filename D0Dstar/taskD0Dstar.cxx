@@ -910,6 +910,14 @@ struct HfTaskD0Dstar {
         continue;
       }
 
+      const int expectedDstarSign = softPiSign > 0 ? 1 : -1;
+
+      const double massDstar = expectedDstarSign > 0 ? dstar.invMassDstar() : dstar.invMassAntiDstar();
+
+      const auto pDstar = dstar.pVector();
+
+      const ROOT::Math::PxPyPzMVector fourVectorDstar(pDstar[0], pDstar[1], pDstar[2], massDstar);
+
       //Get D0 candidates in D*'s collision
       const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
 
@@ -920,11 +928,10 @@ struct HfTaskD0Dstar {
           continue;
         }
 
-        const bool isTccPlus = softPiSign > 0 && d0.isSelD0() >= selectionFlagD0;
-        const bool isTccMinus = softPiSign < 0 && d0.isSelD0bar() >= selectionFlagD0bar;
+        const bool passesD0 = d0.isSelD0() >= selectionFlagD0;
+        const bool passesD0bar = d0.isSelD0bar() >= selectionFlagD0bar;
 
-        //Check if Tcc has right charge
-        if (!isTccPlus && !isTccMinus) {
+        if (!passesD0 && !passesD0bar) {
           continue;
         }
 
@@ -939,22 +946,23 @@ struct HfTaskD0Dstar {
         }
 
         //Reconstructed constituent masses
+        const auto pD0 = d0.pVector();
+
+        for (const int expectedSign : {1, -1}) {
+          if ((expectedD0Sign > 0 && !passesD0) || (expectedD0Sign < 0 && !passesD0bar)){
+            continue;
+          }
+        }
+
         double massD0;
 
-        if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
-          massD0 = isTccPlus ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
+        if constexpr (ReconstructionType == aod::hf_cand::VertexerType::Kfparticle) {
+          massD0 = expectedD0Sign > 0 ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
+        } else {
+          massD0 = expectedD0Sign > 0 ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
         }
-        else{
-          massD0 = isTccPlus ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
-        }
-
-        const double massDstar = isTccPlus ?  dstar.invMassDstar() : dstar.invMassAntiDstar();
-        
-        const auto pD0 = d0.pVector();
-        const auto pDstar = dstar.pVector();
 
         const ROOT::Math::PxPyPzMVector fourVectorD0(pD0[0], pD0[1], pD0[2], massD0);
-        const ROOT::Math::PxPyPzMVector fourVectorDstar(pDstar[0], pDstar[1], pDstar[2], massDstar);
 
         const auto fourVectorTcc = fourVectorD0 + fourVectorDstar;
 
@@ -975,11 +983,9 @@ struct HfTaskD0Dstar {
         constexpr int channelD0 = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
         constexpr int channelDstar = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
 
-        const int expectedSign = isTccPlus ? 1 : -1;
-
         //Signed matching also checks selected particle/antiparticle hypthesis
-        const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedSign * channelD0;
-        const bool matchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == expectedSign * channelDstar;
+        const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedD0Sign * channelD0;
+        const bool matchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == expectedDstarSign * channelDstar;
 
         const int truthStatus = static_cast<int>(matchedD0) + 2 * static_cast<int>(matchedDstar);
         registry.fill(HIST("hMcPairTruthStatus"), truthStatus);
@@ -1009,8 +1015,8 @@ struct HfTaskD0Dstar {
           const auto mcDstar = mcParticles.rawIteratorAt(indexMcDstar - mcParticles.offset());
 
           //Check generated flavour against reconstructed hypothesis
-          if (mcD0.pdgCode() != expectedSign * o2::constants::physics::Pdg::kD0 ||
-              mcDstar.pdgCode() != expectedSign * o2::constants::physics::Pdg::kDStar){
+          if (mcD0.pdgCode() != expectedD0Sign * o2::constants::physics::Pdg::kD0 ||
+              mcDstar.pdgCode() != expectedDstarSign * o2::constants::physics::Pdg::kDStar){
                 continue;
               }
 
@@ -1042,6 +1048,7 @@ struct HfTaskD0Dstar {
 
           // Temporary diagnostic: identify what actually produced the pair.
           LOGP(info, "Matched D0-Dstar pair: common mother PDG={}, pT={}", commonMother.pdgCode(), commonMother.pt());
+          }
         }
       }
     }
