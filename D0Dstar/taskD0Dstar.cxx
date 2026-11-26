@@ -233,9 +233,8 @@ struct HfTaskD0Dstar {
     if ((storeZdcEnergy || storeZdcTime) && !(doprocessDataWithDCAFitterNWithUpc || doprocessDataWithDCAFitterNMlWithUpc)) {
       LOGP(fatal, "Can't enable the storeZdcEnergy and storeZdcTime without UPC process");
     }
-    auto vbins = (std::vector<double>)binsPt;
-        auto vbins = static_cast<std::vector<double>>(binsPt);
 
+    auto vbins = static_cast<std::vector<double>>(binsPt);
     registry.add("hMass", "2-prong candidates;inv. mass (#pi K) (GeV/#it{c}^{2});entries", {HistType::kTH2F, {{500, 0., 5.}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
     registry.add("hMassVsPhi", "2-prong candidates vs phi;inv. mass (#pi K) (GeV/#it{c}^{2});phi (rad);entries", {HistType::kTH3F, {{120, 1.5848, 2.1848}, {vbins, "#it{p}_{T} (GeV/#it{c})"}, {32, 0, o2::constants::math::TwoPI}}});
     registry.add("hMassFinerBinning", "2-prong candidates;inv. mass (#pi K) (GeV/#it{c}^{2});entries", {HistType::kTH2F, {{120, 1.5848, 2.1848}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});

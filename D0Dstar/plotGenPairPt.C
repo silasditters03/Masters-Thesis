@@ -11,7 +11,7 @@ void plotGenPairPt()
 {
   const char* input =
     "/Users/ml2024/SilasThesis/Masters-Thesis/D0Dstar/"
-    "work-tcc-eta-all/AnalysisResults.root";
+    "work-full/AnalysisResults.root";
 
   const char* output =
     "/Users/ml2024/SilasThesis/Masters-Thesis/D0Dstar/"
