@@ -948,110 +948,109 @@ struct HfTaskD0Dstar {
         //Reconstructed constituent masses
         const auto pD0 = d0.pVector();
 
-        for (const int expectedSign : {1, -1}) {
+        for (const int expectedD0Sign : {1, -1}) {
           if ((expectedD0Sign > 0 && !passesD0) || (expectedD0Sign < 0 && !passesD0bar)){
             continue;
           }
-        }
 
-        double massD0;
+          double massD0;
 
-        if constexpr (ReconstructionType == aod::hf_cand::VertexerType::Kfparticle) {
-          massD0 = expectedD0Sign > 0 ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
-        } else {
-          massD0 = expectedD0Sign > 0 ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
-        }
+          if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
+            massD0 = expectedD0Sign > 0 ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
+          } else {
+            massD0 = expectedD0Sign > 0 ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
+          }
 
-        const ROOT::Math::PxPyPzMVector fourVectorD0(pD0[0], pD0[1], pD0[2], massD0);
+          const ROOT::Math::PxPyPzMVector fourVectorD0(pD0[0], pD0[1], pD0[2], massD0);
 
-        const auto fourVectorTcc = fourVectorD0 + fourVectorDstar;
+          const auto fourVectorTcc = fourVectorD0 + fourVectorDstar;
 
-        const double massTcc = fourVectorTcc.M();
-        const double ptTcc = fourVectorTcc.Pt();
-        const double yTcc = fourVectorTcc.Rapidity();
+          const double massTcc = fourVectorTcc.M();
+          const double ptTcc = fourVectorTcc.Pt();
+          const double yTcc = fourVectorTcc.Rapidity();
 
-        if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax) {
-          continue;
-        }
-
-        //Inclusive reconstructed pairs
-        registry.fill(HIST("hMassTcc"), massTcc);
-        registry.fill(HIST("hPtTcc"), ptTcc);
-        registry.fill(HIST("hMassVsPtTcc"), massTcc, ptTcc);
-
-        //MC-specific information starts here
-        constexpr int channelD0 = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
-        constexpr int channelDstar = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
-
-        //Signed matching also checks selected particle/antiparticle hypthesis
-        const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedD0Sign * channelD0;
-        const bool matchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == expectedDstarSign * channelDstar;
-
-        const int truthStatus = static_cast<int>(matchedD0) + 2 * static_cast<int>(matchedDstar);
-        registry.fill(HIST("hMcPairTruthStatus"), truthStatus);
-
-        if (matchedD0 && matchedDstar) {
-          registry.fill(HIST("hMassTccBothMatched"), massTcc);
-
-          //Get on daugther track from independant D0, and soft pion from D*
-          const auto d0Track = d0.template prong0_as<TracksSelQuality>();
-          const auto softPiTrack = dstar.template prongPi_as<TracksSelQuality>();
-
-          if (!d0Track.has_mcParticle() || !softPiTrack.has_mcParticle()) {
+          if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax) {
             continue;
           }
 
-          //Follow the daugther tracks MC ancestry to their meson parents
-          //"True" also accepts the charge-conjugate particles.
-          const int indexMcD0 = RecoDecay::getMother(mcParticles, d0Track.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kD0, true);
-          const int indexMcDstar = RecoDecay::getMother(mcParticles, softPiTrack.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kDStar, true);
+          //Inclusive reconstructed pairs
+          registry.fill(HIST("hMassTcc"), massTcc);
+          registry.fill(HIST("hPtTcc"), ptTcc);
+          registry.fill(HIST("hMassVsPtTcc"), massTcc, ptTcc);
 
-          if (indexMcD0 < 0 || indexMcDstar < 0) {
-            continue;
-          }
+          //MC-specific information starts here
+          constexpr int channelD0 = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
+          constexpr int channelDstar = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
 
-          //getMother returns global indices; rawIteratorAt uses local row indices
-          const auto mcD0 = mcParticles.rawIteratorAt(indexMcD0 - mcParticles.offset());
-          const auto mcDstar = mcParticles.rawIteratorAt(indexMcDstar - mcParticles.offset());
+          //Signed matching also checks selected particle/antiparticle hypthesis
+          const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedD0Sign * channelD0;
+          const bool matchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == expectedDstarSign * channelDstar;
 
-          //Check generated flavour against reconstructed hypothesis
-          if (mcD0.pdgCode() != expectedD0Sign * o2::constants::physics::Pdg::kD0 ||
-              mcDstar.pdgCode() != expectedDstarSign * o2::constants::physics::Pdg::kDStar){
-                continue;
+          const int truthStatus = static_cast<int>(matchedD0) + 2 * static_cast<int>(matchedDstar);
+          registry.fill(HIST("hMcPairTruthStatus"), truthStatus);
+
+          if (matchedD0 && matchedDstar) {
+            registry.fill(HIST("hMassTccBothMatched"), massTcc);
+
+            //Get on daugther track from independant D0, and soft pion from D*
+            const auto d0Track = d0.template prong0_as<TracksSelQuality>();
+            const auto softPiTrack = dstar.template prongPi_as<TracksSelQuality>();
+
+            if (!d0Track.has_mcParticle() || !softPiTrack.has_mcParticle()) {
+              continue;
+            }
+
+            //Follow the daugther tracks MC ancestry to their meson parents
+            //"True" also accepts the charge-conjugate particles.
+            const int indexMcD0 = RecoDecay::getMother(mcParticles, d0Track.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kD0, true);
+            const int indexMcDstar = RecoDecay::getMother(mcParticles, softPiTrack.template mcParticle_as<aod::McParticles>(), o2::constants::physics::Pdg::kDStar, true);
+
+            if (indexMcD0 < 0 || indexMcDstar < 0) {
+              continue;
+            }
+
+            //getMother returns global indices; rawIteratorAt uses local row indices
+            const auto mcD0 = mcParticles.rawIteratorAt(indexMcD0 - mcParticles.offset());
+            const auto mcDstar = mcParticles.rawIteratorAt(indexMcDstar - mcParticles.offset());
+
+            //Check generated flavour against reconstructed hypothesis
+            if (mcD0.pdgCode() != expectedD0Sign * o2::constants::physics::Pdg::kD0 ||
+                mcDstar.pdgCode() != expectedDstarSign * o2::constants::physics::Pdg::kDStar){
+                  continue;
+                }
+
+            //Both candidates must have same generated collision
+            if (mcD0.mcCollisionId() != mcDstar.mcCollisionId()) {
+              continue;
+            }
+
+            //Check if they share the same mother
+            //IndexCommonMother, default = -1, means "no found"
+            int indexCommonMother = -1;
+            for (const auto& motherD0 : mcD0.mothers_as<aod::McParticles>()) {
+              for (const auto& motherDstar : mcDstar.mothers_as<aod::McParticles>()) {
+                if (motherD0.globalIndex() == motherDstar.globalIndex()) {
+                  indexCommonMother = motherD0.globalIndex();
+                  break;
+                }
               }
-
-          //Both candidates must have same generated collision
-          if (mcD0.mcCollisionId() != mcDstar.mcCollisionId()) {
-            continue;
-          }
-
-          //Check if they share the same mother
-          //IndexCommonMother, default = -1, means "no found"
-          int indexCommonMother = -1;
-          for (const auto& motherD0 : mcD0.mothers_as<aod::McParticles>()) {
-            for (const auto& motherDstar : mcDstar.mothers_as<aod::McParticles>()) {
-              if (motherD0.globalIndex() == motherDstar.globalIndex()) {
-                indexCommonMother = motherD0.globalIndex();
+              if (indexCommonMother >= 0) {
                 break;
               }
             }
-            if (indexCommonMother >= 0) {
-              break;
+            if (indexCommonMother < 0) {
+              continue;
             }
-          }
-          if (indexCommonMother < 0) {
-            continue;
-          }
 
-          //Common mother of D0 and D*
-          const auto commonMother = mcParticles.rawIteratorAt(indexCommonMother - mcParticles.offset());
+            //Common mother of D0 and D*
+            const auto commonMother = mcParticles.rawIteratorAt(indexCommonMother - mcParticles.offset());
 
-          // Temporary diagnostic: identify what actually produced the pair.
-          LOGP(info, "Matched D0-Dstar pair: common mother PDG={}, pT={}", commonMother.pdgCode(), commonMother.pt());
-          }
-        }
-      }
-    }
+            // Temporary diagnostic: identify what actually produced the pair.
+            LOGP(info, "Matched D0-Dstar pair: common mother PDG={}, pT={}", commonMother.pdgCode(), commonMother.pt());
+          } //Close if(matchedD0 && matchedDstar)
+        } //Close flavour-hypothesis loop
+      } //Close D0 candidate Loop
+    } //Close Dstar candidate loop
 
     //Generated level
     for (const auto& particle : mcParticles) {
