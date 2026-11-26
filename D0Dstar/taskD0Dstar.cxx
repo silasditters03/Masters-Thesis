@@ -910,20 +910,20 @@ struct HfTaskD0Dstar {
     registry.fill(HIST("hCollisionsMcReco"), 0., static_cast<double>(collisions.size()));
     registry.fill(HIST("hCollisionsMcGen"), 0., static_cast<double>(mcCollisions.size()));
     for (const auto& dstar : dstarCandidates) {
-      registry.fill(HIST("hTccPairFlowMc"), 0.);
+      registry.fill(HIST("hTccPairFlowMc"), 1.);
 
       //Check Dstar -> D0 pi candidate flag
       if (!dstar.isSelDstarToD0Pi()) {
         continue;
       }
-      registry.fill(HIST("hTccPairFlowMc"), 1.);  
+      registry.fill(HIST("hTccPairFlowMc"), 2.);  
 
       //Check if there is a proper soft pion
       const auto softPiSign = dstar.signSoftPi();
       if (softPiSign == 0) {
         continue;
       }
-      registry.fill(HIST("hTccPairFlowMc"), 2.);
+      registry.fill(HIST("hTccPairFlowMc"), 3.);
 
       const int expectedDstarSign = softPiSign > 0 ? 1 : -1;
 
@@ -937,13 +937,13 @@ struct HfTaskD0Dstar {
       const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
 
       for (const auto& d0 : d0s) {
-        registry.fill(HIST("hTccPairFlowMc"), 3.);
+        registry.fill(HIST("hTccPairFlowMc"), 4.);
         
         //Check if D0 -> K Pi flag is satisfied
         if (!(d0.hfflag() & (1 << aod::hf_cand_2prong::DecayType::D0ToPiK))) {
           continue;
         }
-        registry.fill(HIST("hTccPairFlowMc"), 4.);
+        registry.fill(HIST("hTccPairFlowMc"), 5.);
 
         const bool passesD0 = d0.isSelD0() >= selectionFlagD0;
         const bool passesD0bar = d0.isSelD0bar() >= selectionFlagD0bar;
@@ -951,7 +951,7 @@ struct HfTaskD0Dstar {
         if (!passesD0 && !passesD0bar) {
           continue;
         }
-        registry.fill(HIST("hTccPairFlowMc"), 5.);
+        registry.fill(HIST("hTccPairFlowMc"), 6.);
 
         // Reject shared tracks.
         if (d0.prong0Id() == dstar.prong0Id() ||
@@ -962,7 +962,7 @@ struct HfTaskD0Dstar {
             d0.prong1Id() == dstar.prongPiId()) {
           continue;
         }
-        registry.fill(HIST("hTccPairFlowMc"), 6.);
+        registry.fill(HIST("hTccPairFlowMc"), 7.);
 
         //Reconstructed constituent masses
         const auto pD0 = d0.pVector();
@@ -991,7 +991,7 @@ struct HfTaskD0Dstar {
           if (yTccRecoMax >= 0. && std::abs(yTcc) > yTccRecoMax) {
             continue;
           }
-          registry.fill(HIST("hTccPairFlowMc"), 7.);
+          registry.fill(HIST("hTccPairFlowMc"), 8.);
 
           //Inclusive reconstructed pairs
           registry.fill(HIST("hMassTcc"), massTcc);
