@@ -243,14 +243,15 @@ struct HfTaskD0Dstar {
     registry.add("hCollisionsData", "Input collisions in processData;Counter;Collisions", {HistType::kTH1D, {{1, -0.5, 0.5}}});
     registry.add("hCollisionsMcReco", "Input reconstructed collisions in processMc;Counter;Collisions", {HistType::kTH1D, {{1, -0.5, 0.5}}});
     registry.add("hCollisionsMcGen", "Input generated collisions in processMc;Counter;Collisions", {HistType::kTH1D, {{1, -0.5, 0.5}}});
-    registry.add("hMassTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{600, 3.6, 4.2}}});
+    registry.add("hMassTcc", "Selected reconstructed D0-Dstar pairs;M(D^{0}D*) (GeV/c^{2});Entries", {HistType::kTH1F, {{1300, 3., 16.}}});
+    registry.add("hMassVsPtTcc", "Selected reconstructed D0-Dstar pairs;M(D^{0}D*) (GeV/c^{2});p_{T} (GeV/c)", {HistType::kTH2F, {{1300, 3., 16.}, {200, 0., 100.}}});
     registry.add("hPtTcc", "Selected D0-D* pairs; #it{p}_{T}(D^{0}D*) (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
-    registry.add("hMassVsPtTcc", "Selected D0-D* pairs; #it{M}(D^{0}D*) (GeV/#it{c}^{2});" "#it{p}_{T}(D^{0}D*) (GeV/#it{c})", {HistType::kTH2F, {{600, 3.6, 4.2}, {200, 0., 100.}}});
     registry.add("hTccInputs", "Input counts;counter;count", {HistType::kTH1D, {{3, -0.5, 2.5}}});
     registry.add("hTccDstarFlow", "D* selection for pairing;stage;count", {HistType::kTH1D, {{4, -0.5, 3.5}}});
     registry.add("hTccPairFlow", "D0-D* pairing selections;stage;count", {HistType::kTH1D, {{5, -0.5, 4.5}}});
     registry.add("hMcPairTruthStatus", "Selected reconstructed pairs;constituent matching category;entries", {HistType::kTH1F, {{4, -0.5, 3.5}}});
-    registry.add("hMassTccBothMatched", "Pairs with both constituents truth matched;#it{M}(D^{0}D*) (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{600, 3.6, 4.2}}});
+    registry.add("hMassTccBothMatched", "Reconstructed pairs with both constituents truth matched;M(D^{0}D*) (GeV/c^{2});Entries", {HistType::kTH1F, {{1300, 3., 16.}}});
+    
     registry.add("hMcGenCounts", "Generated particle counts;category;entries", {HistType::kTH1F, {{3, -0.5, 2.5}}});
     registry.add("hMassGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent mass (GeV/#it{c}^{2});entries", {HistType::kTH1F, {{1000, 0., 10.}}});
     registry.add("hPtGenD0DstarParent", "Generated parents decaying directly to D0-D*;parent #it{p}_{T} (GeV/#it{c});entries", {HistType::kTH1F, {{200, 0., 100.}}});
