@@ -146,8 +146,6 @@ struct HfTaskD0Dstar {
   using DstarCandidatesMl = soa::Join<aod::HfD0FromDstar, aod::HfCandDstars, aod::HfSelDstarToD0Pi, aod::HfMlDstarToD0Pi>;
   // Reconstructed candidates with ML scores and MC matching information.
   using DstarCandidatesMlMc = soa::Join<aod::HfD0FromDstar, aod::HfCandDstars, aod::HfSelDstarToD0Pi, aod::HfMlDstarToD0Pi, aod::HfCandDstarMcRec>;
-  // Generated MC particles with D* decay matching information.
-  using DstarParticlesMc = soa::Join<aod::McParticles,aod::HfCandDstarMcGen>;
   
   using Collisions = soa::Join<aod::Collisions, aod::EvSels, aod::PVMults>;
   using CollisionsCent = soa::Join<aod::Collisions, aod::EvSels, aod::PVMults, aod::CentFT0Ms, aod::CentFT0Cs>;
@@ -977,7 +975,8 @@ struct HfTaskD0Dstar {
     registry.fill(HIST("hCollisionsMcReco"), 0., static_cast<double>(collisions.size()));
     registry.fill(HIST("hCollisionsMcGen"), 0., static_cast<double>(mcCollisions.size()));
 
-    constexpr int qaD0Channel = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
+    constexpr int channelD0 = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
+    constexpr int channelDstar = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
 
     for (const auto& d0 : d0Candidates) {
       if (!(d0.hfflag() & (1 << aod::hf_cand_2prong::DecayType::D0ToPiK))) {
@@ -986,7 +985,7 @@ struct HfTaskD0Dstar {
 
       const double ptD0 = d0.pt();
       const int matchFlag = static_cast<int>(d0.flagMcMatchRec());
-      const bool matchedD0Candidate = std::abs(matchFlag) == qaD0Channel;
+      const bool matchedD0Candidate = std::abs(matchFlag) == channelD0;
 
       const double dcaD0 = std::abs(d0.impactParameterXY());
       const double normDauIPXY = std::min(std::abs(d0.impactParameterNormalised0()),
@@ -1019,7 +1018,7 @@ struct HfTaskD0Dstar {
       // These six quantities depend on which daughter is assigned the kaon mass.
       for (const int sign : {1, -1}) {
         const bool isD0 = sign > 0;
-        const bool matchedHypothesis = matchFlag == sign * qaD0Channel;
+        const bool matchedHypothesis = matchFlag == sign * channelD0;
 
         const auto& pion = isD0 ? pos : neg;
         const auto& kaon = isD0 ? neg : pos;
@@ -1057,7 +1056,7 @@ struct HfTaskD0Dstar {
 
       if (dstar.isRecoD0Flag() && dstar.signSoftPi() != 0) {
         const int qaDstarSign = dstar.signSoftPi() > 0 ? 1 : -1;
-        const bool qaMatchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == qaDstarSign * dstarDecayChannel;
+        const bool qaMatchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == qaDstarSign * channelDstar;
 
         const double qaPtDstar = dstar.pt();
         const double qaMassDstar = qaDstarSign > 0 ? dstar.invMassDstar() : dstar.invMassAntiDstar();
@@ -1165,10 +1164,6 @@ struct HfTaskD0Dstar {
           registry.fill(HIST("hMassTcc"), massTcc);
           registry.fill(HIST("hPtTcc"), ptTcc);
           registry.fill(HIST("hMassVsPtTcc"), massTcc, ptTcc);
-
-          //MC-specific information starts here
-          constexpr int channelD0 = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
-          constexpr int channelDstar = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
 
           //Signed matching also checks selected particle/antiparticle hypthesis
           const bool matchedD0 = static_cast<int>(d0.flagMcMatchRec()) == expectedD0Sign * channelD0;
