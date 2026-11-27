@@ -284,6 +284,27 @@ struct HfTaskD0Dstar {
     recoFlowAxis->SetBinLabel(6, "D0 selection");
     recoFlowAxis->SetBinLabel(7, "Distinct tracks");
     recoFlowAxis->SetBinLabel(8, "Rapidity hypotheses");
+
+    registry.add("hDstarFlowMcAll", "All reconstructed Dstars;Stage;Dstar candidates", {HistType::kTH1D, {{6, 0.5, 6.5}}});
+    registry.add("hDstarFlowMcMatched", "Truth-matched reconstructed Dstars;Stage;Dstar candidates", {HistType::kTH1D, {{6, 0.5, 6.5}}});
+
+    auto* allDstarAxis = registry.get<TH1>(HIST("hDstarFlowMcAll"))->GetXaxis();
+
+    auto* matchedDstarAxis = registry.get<TH1>(HIST("hDstarFlowMcMatched"))->GetXaxis();
+
+    const char* dstarFlowLabels[] = {
+      "Input",
+      "Dstar selected",
+      "Soft-pion charge",
+      "Selected D0 partner",
+      "Independent D0 partner",
+      "Accepted pair hypothesis"
+    };
+
+    for (int bin = 1; bin <= 6; ++bin) {
+      allDstarAxis->SetBinLabel(bin, dstarFlowLabels[bin - 1]);
+      matchedDstarAxis->SetBinLabel(bin, dstarFlowLabels[bin - 1]);
+    }
     
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
     const AxisSpec thnAxisPt{thnConfigAxisPt, "#it{p}_{T} (GeV/#it{c})"};
@@ -912,11 +933,32 @@ struct HfTaskD0Dstar {
     for (const auto& dstar : dstarCandidates) {
       registry.fill(HIST("hTccPairFlowMc"), 1.);
 
+      //D* truth Check
+        constexpr int dstarDecayChannel = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
+
+        // Count both Dstar charges using the MC decay-matching flag.
+        const bool dstarIsMcMatched = std::abs(static_cast<int>(dstar.flagMcMatchRec())) == dstarDecayChannel;
+
+        const auto fillDstarTruthFlow = [&](double stage) {
+          registry.fill(HIST("hDstarFlowMcAll"), stage);
+
+          if (dstarIsMcMatched) {
+            registry.fill(HIST("hDstarFlowMcMatched"), stage);
+          }
+        };
+
+      fillDstarTruthFlow(1.);
+
+      // Existing reconstructed cut-flow and selections continue here.
+      registry.fill(HIST("hTccPairFlowMc"), 1.);
+      //End of D* truth Check
+
       //Check Dstar -> D0 pi candidate flag
       if (!dstar.isSelDstarToD0Pi()) {
         continue;
       }
       registry.fill(HIST("hTccPairFlowMc"), 2.);  
+      fillDstarTruthFlow(2.);
 
       //Check if there is a proper soft pion
       const auto softPiSign = dstar.signSoftPi();
@@ -924,6 +966,7 @@ struct HfTaskD0Dstar {
         continue;
       }
       registry.fill(HIST("hTccPairFlowMc"), 3.);
+      fillDstarTruthFlow(3.);
 
       const int expectedDstarSign = softPiSign > 0 ? 1 : -1;
 
@@ -935,6 +978,10 @@ struct HfTaskD0Dstar {
 
       //Get D0 candidates in D*'s collision
       const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
+
+      bool countedSelectedD0Partner = false;
+      bool countedIndependentD0Partner = false;
+      bool countedAcceptedPair = false;
 
       for (const auto& d0 : d0s) {
         registry.fill(HIST("hTccPairFlowMc"), 4.);
@@ -953,6 +1000,11 @@ struct HfTaskD0Dstar {
         }
         registry.fill(HIST("hTccPairFlowMc"), 6.);
 
+        if (!countedSelectedD0Partner) {
+          fillDstarTruthFlow(4.);
+          countedSelectedD0Partner = true;
+        }
+
         // Reject shared tracks.
         if (d0.prong0Id() == dstar.prong0Id() ||
             d0.prong0Id() == dstar.prong1Id() ||
@@ -963,6 +1015,12 @@ struct HfTaskD0Dstar {
           continue;
         }
         registry.fill(HIST("hTccPairFlowMc"), 7.);
+
+
+        if (!countedIndependentD0Partner) {
+          fillDstarTruthFlow(5.);
+          countedIndependentD0Partner = true;
+        }
 
         //Reconstructed constituent masses
         const auto pD0 = d0.pVector();
@@ -992,6 +1050,11 @@ struct HfTaskD0Dstar {
             continue;
           }
           registry.fill(HIST("hTccPairFlowMc"), 8.);
+
+          if (!countedAcceptedPair) {
+            fillDstarTruthFlow(6.);
+            countedAcceptedPair = true;
+          }
 
           //Inclusive reconstructed pairs
           registry.fill(HIST("hMassTcc"), massTcc);
