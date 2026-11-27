@@ -154,7 +154,7 @@ struct HfTaskD0Dstar {
   using CollisionsWithMcLabels = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::PVMults>;
   using CollisionsWithMcLabelsCent = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::PVMults, aod::CentFT0Ms, aod::CentFT0Cs>;
   using McCollisionsWithCentrality = soa::Join<aod::McCollisions, aod::McCentFT0Cs, aod::McCentFT0Ms>;
-  using TracksSelQuality = soa::Join<aod::TracksExtra, aod::TracksWMc>;
+  using TracksSelQuality = soa::Join<aod::TracksExtra, aod::TracksWMc, aod::TracksDCA>;
   using TracksWPid = soa::Join<o2::aod::FullTracks, aod::TracksDCA, o2::aod::TrackSelection, aod::TracksPidPi, aod::PidTpcTofFullPi, aod::TracksPidKa, aod::PidTpcTofFullKa, aod::TracksPidPr, aod::PidTpcTofFullPr>;
   // using TracksWithExtra = o2::soa::Join<o2::aod::FullTracks, o2::aod::TrackSelection>;
   Filter filterD0Flag = (o2::aod::hf_track_index::hfflag & static_cast<uint8_t>(BIT(aod::hf_cand_2prong::DecayType::D0ToPiK))) != static_cast<uint8_t>(0);
@@ -285,25 +285,71 @@ struct HfTaskD0Dstar {
     recoFlowAxis->SetBinLabel(7, "Distinct tracks");
     recoFlowAxis->SetBinLabel(8, "Rapidity hypotheses");
 
-    registry.add("hDstarFlowMcAll", "All reconstructed Dstars;Stage;Dstar candidates", {HistType::kTH1D, {{6, 0.5, 6.5}}});
-    registry.add("hDstarFlowMcMatched", "Truth-matched reconstructed Dstars;Stage;Dstar candidates", {HistType::kTH1D, {{6, 0.5, 6.5}}});
+    //Registering Histograms for checking cuts
+    if (doprocessMcWithDCAFitterN || doprocessMcWithDCAFitterNCent || doprocessMcWithKFParticle ||
+    doprocessMcWithDCAFitterNMl || doprocessMcWithDCAFitterNMlCent || doprocessMcWithKFParticleMl) {
 
-    auto* allDstarAxis = registry.get<TH1>(HIST("hDstarFlowMcAll"))->GetXaxis();
+      const AxisSpec axisPtD0QA{vbins, "D^{0} p_{T} (GeV/c)"};
+      const AxisSpec axisPtDstarQA{hf_cuts_dstar_to_d0_pi::vecBinsPt, "D* p_{T} (GeV/c)"};
 
-    auto* matchedDstarAxis = registry.get<TH1>(HIST("hDstarFlowMcMatched"))->GetXaxis();
+      // Standalone D0: signal and background.
+      registry.add("QA/D0/Sig/m", "D^{0} signal;|M(K#pi)-m_{D^{0}}| (GeV/c^{2});D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.75}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/m", "D^{0} background;|M(K#pi)-m_{D^{0}}| (GeV/c^{2});D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.75}, axisPtD0QA});
 
-    const char* dstarFlowLabels[] = {
-      "Input",
-      "Dstar selected",
-      "Soft-pion charge",
-      "Selected D0 partner",
-      "Independent D0 partner",
-      "Accepted pair hypothesis"
-    };
+      registry.add("QA/D0/Sig/DCA", "D^{0} signal;|DCA_{xy}(D^{0})| (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.25}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/DCA", "D^{0} background;|DCA_{xy}(D^{0})| (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.25}, axisPtD0QA});
 
-    for (int bin = 1; bin <= 6; ++bin) {
-      allDstarAxis->SetBinLabel(bin, dstarFlowLabels[bin - 1]);
-      matchedDstarAxis->SetBinLabel(bin, dstarFlowLabels[bin - 1]);
+      registry.add("QA/D0/Sig/cosThetaStar", "D^{0} signal;|cos #theta*|;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{100, 0., 1.001}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/cosThetaStar", "D^{0} background;|cos #theta*|;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{100, 0., 1.001}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/ptK", "D^{0} signal;Kaon p_{T} (GeV/c);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{200, 0., 20.}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/ptK", "D^{0} background;Kaon p_{T} (GeV/c);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{200, 0., 20.}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/ptPi", "D^{0} signal;Pion p_{T} (GeV/c);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{200, 0., 20.}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/ptPi", "D^{0} background;Pion p_{T} (GeV/c);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{200, 0., 20.}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/d0K", "D^{0} signal;|d_{0}(K)| (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.5}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/d0K", "D^{0} background;|d_{0}(K)| (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.5}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/d0pi", "D^{0} signal;|d_{0}(#pi)| (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.5}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/d0pi", "D^{0} background;|d_{0}(#pi)| (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.5}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/d0d0", "D^{0} signal;d_{0,0} d_{0,1} (cm^{2});D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{300, -0.03, 0.03}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/d0d0", "D^{0} background;d_{0,0} d_{0,1} (cm^{2});D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{300, -0.03, 0.03}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/cpa", "D^{0} signal;cos pointing angle;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{220, -1.001, 1.001}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/cpa", "D^{0} background;cos pointing angle;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{220, -1.001, 1.001}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/cpaXY", "D^{0} signal;cos pointing angle in xy;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{220, -1.001, 1.001}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/cpaXY", "D^{0} background;cos pointing angle in xy;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{220, -1.001, 1.001}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/normDecLenXY", "D^{0} signal;L_{xy}/#sigma(L_{xy});D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 100.}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/normDecLenXY", "D^{0} background;L_{xy}/#sigma(L_{xy});D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 100.}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/decLen", "D^{0} signal;Decay length (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 2.}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/decLen", "D^{0} background;Decay length (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 2.}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/decLenXY", "D^{0} signal;L_{xy} (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 2.}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/decLenXY", "D^{0} background;L_{xy} (cm);D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 2.}, axisPtD0QA});
+
+      registry.add("QA/D0/Sig/normDauIPXY", "D^{0} signal;Smaller daughter |d_{0}/#sigma(d_{0})|;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{200, 0., 40.}, axisPtD0QA});
+      registry.add("QA/D0/Bkg/normDauIPXY", "D^{0} background;Smaller daughter |d_{0}/#sigma(d_{0})|;D^{0} p_{T} (GeV/c)", HistType::kTH2F, {{200, 0., 40.}, axisPtD0QA});
+
+      // Dstar: signal and background.
+      registry.add("QA/Dstar/Sig/ptDstar", "D* signal;D* p_{T} (GeV/c);Candidates", HistType::kTH1F, {{240, 0., 60.}});
+      registry.add("QA/Dstar/Bkg/ptDstar", "D* background;D* p_{T} (GeV/c);Candidates", HistType::kTH1F, {{240, 0., 60.}});
+
+      registry.add("QA/Dstar/Sig/deltaM", "D* signal;|M(K#pi#pi_{s})-M(K#pi)| (GeV/c^{2});D* p_{T} (GeV/c)", HistType::kTH2F, {{400, 0.12, 0.32}, axisPtDstarQA});
+      registry.add("QA/Dstar/Bkg/deltaM", "D* background;|M(K#pi#pi_{s})-M(K#pi)| (GeV/c^{2});D* p_{T} (GeV/c)", HistType::kTH2F, {{400, 0.12, 0.32}, axisPtDstarQA});
+
+      registry.add("QA/Dstar/Sig/ptSoftPi", "D* signal;Soft-pion p_{T} (GeV/c);D* p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 2.5}, axisPtDstarQA});
+      registry.add("QA/Dstar/Bkg/ptSoftPi", "D* background;Soft-pion p_{T} (GeV/c);D* p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 2.5}, axisPtDstarQA});
+
+      registry.add("QA/Dstar/Sig/d0SoftPi", "D* signal;Soft-pion |d_{0}| (cm);D* p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.5}, axisPtDstarQA});
+      registry.add("QA/Dstar/Bkg/d0SoftPi", "D* background;Soft-pion |d_{0}| (cm);D* p_{T} (GeV/c)", HistType::kTH2F, {{250, 0., 0.5}, axisPtDstarQA});
+
+      registry.add("QA/Dstar/Sig/d0SoftPiNormalised", "D* signal;Soft-pion |d_{0}/#sigma(d_{0})|;D* p_{T} (GeV/c)", HistType::kTH2F, {{240, 0., 60.}, axisPtDstarQA});
+      registry.add("QA/Dstar/Bkg/d0SoftPiNormalised", "D* background;Soft-pion |d_{0}/#sigma(d_{0})|;D* p_{T} (GeV/c)", HistType::kTH2F, {{240, 0., 60.}, axisPtDstarQA});
     }
     
     const AxisSpec thnAxisMass{thnConfigAxisMass, "inv. mass (#pi K) (GeV/#it{c}^{2})"};
@@ -930,35 +976,114 @@ struct HfTaskD0Dstar {
     //Reconstructed level
     registry.fill(HIST("hCollisionsMcReco"), 0., static_cast<double>(collisions.size()));
     registry.fill(HIST("hCollisionsMcGen"), 0., static_cast<double>(mcCollisions.size()));
+
+    constexpr int qaD0Channel = static_cast<int>(o2::hf_decay::hf_cand_2prong::DecayChannelMain::D0ToPiK);
+
+    for (const auto& d0 : d0Candidates) {
+      if (!(d0.hfflag() & (1 << aod::hf_cand_2prong::DecayType::D0ToPiK))) {
+        continue;
+      }
+
+      const double ptD0 = d0.pt();
+      const int matchFlag = static_cast<int>(d0.flagMcMatchRec());
+      const bool matchedD0Candidate = std::abs(matchFlag) == qaD0Channel;
+
+      const double dcaD0 = std::abs(d0.impactParameterXY());
+      const double normDauIPXY = std::min(std::abs(d0.impactParameterNormalised0()),
+                                          std::abs(d0.impactParameterNormalised1()));
+
+      // These eight quantities have one value per candidate.
+      if (matchedD0Candidate) {
+        registry.fill(HIST("QA/D0/Sig/DCA"), dcaD0, ptD0);
+        registry.fill(HIST("QA/D0/Sig/d0d0"), d0.impactParameterProduct(), ptD0);
+        registry.fill(HIST("QA/D0/Sig/cpa"), d0.cpa(), ptD0);
+        registry.fill(HIST("QA/D0/Sig/cpaXY"), d0.cpaXY(), ptD0);
+        registry.fill(HIST("QA/D0/Sig/normDecLenXY"), d0.decayLengthXYNormalised(), ptD0);
+        registry.fill(HIST("QA/D0/Sig/decLen"), d0.decayLength(), ptD0);
+        registry.fill(HIST("QA/D0/Sig/decLenXY"), d0.decayLengthXY(), ptD0);
+        registry.fill(HIST("QA/D0/Sig/normDauIPXY"), normDauIPXY, ptD0);
+      } else {
+        registry.fill(HIST("QA/D0/Bkg/DCA"), dcaD0, ptD0);
+        registry.fill(HIST("QA/D0/Bkg/d0d0"), d0.impactParameterProduct(), ptD0);
+        registry.fill(HIST("QA/D0/Bkg/cpa"), d0.cpa(), ptD0);
+        registry.fill(HIST("QA/D0/Bkg/cpaXY"), d0.cpaXY(), ptD0);
+        registry.fill(HIST("QA/D0/Bkg/normDecLenXY"), d0.decayLengthXYNormalised(), ptD0);
+        registry.fill(HIST("QA/D0/Bkg/decLen"), d0.decayLength(), ptD0);
+        registry.fill(HIST("QA/D0/Bkg/decLenXY"), d0.decayLengthXY(), ptD0);
+        registry.fill(HIST("QA/D0/Bkg/normDauIPXY"), normDauIPXY, ptD0);
+      }
+
+      const auto pos = d0.template prong0_as<TracksSelQuality>();
+      const auto neg = d0.template prong1_as<TracksSelQuality>();
+
+      // These six quantities depend on which daughter is assigned the kaon mass.
+      for (const int sign : {1, -1}) {
+        const bool isD0 = sign > 0;
+        const bool matchedHypothesis = matchFlag == sign * qaD0Channel;
+
+        const auto& pion = isD0 ? pos : neg;
+        const auto& kaon = isD0 ? neg : pos;
+
+        double mass;
+        if constexpr (ReconstructionType == aod::hf_cand::VertexerType::KfParticle) {
+          mass = isD0 ? d0.kfGeoMassD0() : d0.kfGeoMassD0bar();
+        } else {
+          mass = isD0 ? HfHelper::invMassD0ToPiK(d0) : HfHelper::invMassD0barToKPi(d0);
+        }
+
+        const double massDifference = std::abs(mass - o2::constants::physics::MassD0);
+        const double absCosThetaStar = std::abs(isD0 ? HfHelper::cosThetaStarD0(d0) : HfHelper::cosThetaStarD0bar(d0));
+
+        if (matchedHypothesis) {
+          registry.fill(HIST("QA/D0/Sig/m"), massDifference, ptD0);
+          registry.fill(HIST("QA/D0/Sig/cosThetaStar"), absCosThetaStar, ptD0);
+          registry.fill(HIST("QA/D0/Sig/ptK"), kaon.pt(), ptD0);
+          registry.fill(HIST("QA/D0/Sig/ptPi"), pion.pt(), ptD0);
+          registry.fill(HIST("QA/D0/Sig/d0K"), std::abs(kaon.dcaXY()), ptD0);
+          registry.fill(HIST("QA/D0/Sig/d0pi"), std::abs(pion.dcaXY()), ptD0);
+        } else {
+          registry.fill(HIST("QA/D0/Bkg/m"), massDifference, ptD0);
+          registry.fill(HIST("QA/D0/Bkg/cosThetaStar"), absCosThetaStar, ptD0);
+          registry.fill(HIST("QA/D0/Bkg/ptK"), kaon.pt(), ptD0);
+          registry.fill(HIST("QA/D0/Bkg/ptPi"), pion.pt(), ptD0);
+          registry.fill(HIST("QA/D0/Bkg/d0K"), std::abs(kaon.dcaXY()), ptD0);
+          registry.fill(HIST("QA/D0/Bkg/d0pi"), std::abs(pion.dcaXY()), ptD0);
+        }
+      }
+    }
+
     for (const auto& dstar : dstarCandidates) {
       registry.fill(HIST("hTccPairFlowMc"), 1.);
 
-      //D* truth Check
-        constexpr int dstarDecayChannel = static_cast<int>(o2::hf_decay::hf_cand_dstar::DecayChannelMain::DstarToPiKPi);
+      if (dstar.isRecoD0Flag() && dstar.signSoftPi() != 0) {
+        const int qaDstarSign = dstar.signSoftPi() > 0 ? 1 : -1;
+        const bool qaMatchedDstar = static_cast<int>(dstar.flagMcMatchRec()) == qaDstarSign * dstarDecayChannel;
 
-        // Count both Dstar charges using the MC decay-matching flag.
-        const bool dstarIsMcMatched = std::abs(static_cast<int>(dstar.flagMcMatchRec())) == dstarDecayChannel;
+        const double qaPtDstar = dstar.pt();
+        const double qaMassDstar = qaDstarSign > 0 ? dstar.invMassDstar() : dstar.invMassAntiDstar();
+        const double qaMassD0 = qaDstarSign > 0 ? dstar.invMassD0() : dstar.invMassD0Bar();
+        const double qaDeltaM = std::abs(qaMassDstar - qaMassD0);
 
-        const auto fillDstarTruthFlow = [&](double stage) {
-          registry.fill(HIST("hDstarFlowMcAll"), stage);
-
-          if (dstarIsMcMatched) {
-            registry.fill(HIST("hDstarFlowMcMatched"), stage);
-          }
-        };
-
-      fillDstarTruthFlow(1.);
-
-      // Existing reconstructed cut-flow and selections continue here.
-      registry.fill(HIST("hTccPairFlowMc"), 1.);
-      //End of D* truth Check
+        if (qaMatchedDstar) {
+          registry.fill(HIST("QA/Dstar/Sig/ptDstar"), qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Sig/deltaM"), qaDeltaM, qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Sig/ptSoftPi"), dstar.ptSoftPi(), qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Sig/d0SoftPi"), std::abs(dstar.impParamSoftPi()), qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Sig/d0SoftPiNormalised"), std::abs(dstar.normalisedImpParamSoftPi()), qaPtDstar);
+        } else {
+          registry.fill(HIST("QA/Dstar/Bkg/ptDstar"), qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Bkg/deltaM"), qaDeltaM, qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Bkg/ptSoftPi"), dstar.ptSoftPi(), qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Bkg/d0SoftPi"), std::abs(dstar.impParamSoftPi()), qaPtDstar);
+          registry.fill(HIST("QA/Dstar/Bkg/d0SoftPiNormalised"), std::abs(dstar.normalisedImpParamSoftPi()), qaPtDstar);
+        }
+      }
 
       //Check Dstar -> D0 pi candidate flag
       if (!dstar.isSelDstarToD0Pi()) {
         continue;
       }
       registry.fill(HIST("hTccPairFlowMc"), 2.);  
-      fillDstarTruthFlow(2.);
 
       //Check if there is a proper soft pion
       const auto softPiSign = dstar.signSoftPi();
@@ -966,7 +1091,6 @@ struct HfTaskD0Dstar {
         continue;
       }
       registry.fill(HIST("hTccPairFlowMc"), 3.);
-      fillDstarTruthFlow(3.);
 
       const int expectedDstarSign = softPiSign > 0 ? 1 : -1;
 
@@ -978,10 +1102,6 @@ struct HfTaskD0Dstar {
 
       //Get D0 candidates in D*'s collision
       const auto d0s = d0Candidates.sliceBy(candD0PerCollision, dstar.collisionId());
-
-      bool countedSelectedD0Partner = false;
-      bool countedIndependentD0Partner = false;
-      bool countedAcceptedPair = false;
 
       for (const auto& d0 : d0s) {
         registry.fill(HIST("hTccPairFlowMc"), 4.);
@@ -1000,10 +1120,6 @@ struct HfTaskD0Dstar {
         }
         registry.fill(HIST("hTccPairFlowMc"), 6.);
 
-        if (!countedSelectedD0Partner) {
-          fillDstarTruthFlow(4.);
-          countedSelectedD0Partner = true;
-        }
 
         // Reject shared tracks.
         if (d0.prong0Id() == dstar.prong0Id() ||
@@ -1015,12 +1131,6 @@ struct HfTaskD0Dstar {
           continue;
         }
         registry.fill(HIST("hTccPairFlowMc"), 7.);
-
-
-        if (!countedIndependentD0Partner) {
-          fillDstarTruthFlow(5.);
-          countedIndependentD0Partner = true;
-        }
 
         //Reconstructed constituent masses
         const auto pD0 = d0.pVector();
@@ -1050,11 +1160,6 @@ struct HfTaskD0Dstar {
             continue;
           }
           registry.fill(HIST("hTccPairFlowMc"), 8.);
-
-          if (!countedAcceptedPair) {
-            fillDstarTruthFlow(6.);
-            countedAcceptedPair = true;
-          }
 
           //Inclusive reconstructed pairs
           registry.fill(HIST("hMassTcc"), massTcc);
